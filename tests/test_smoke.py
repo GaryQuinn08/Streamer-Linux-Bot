@@ -48,47 +48,62 @@ class RuntimeCase(unittest.TestCase):
 
 class ServerTests(RuntimeCase):
     def test_gift_event_triggers_alert_over_websocket(self) -> None:
-        async def flow() -> list[dict]:
-            received: list[dict] = []
+        async def flow() -> None:
             async with aiohttp.ClientSession() as session:
-                async with session.ws_connect(f"{self.base_url}/ws") as ws:
-                    hello = await ws.receive_json(timeout=5)
-                    self.assertEqual(hello["type"], "hello")
-                    async with session.post(f"{self.base_url}/api/test", json={"sample": "gift"}) as resp:
-                        self.assertEqual(resp.status, 200)
-                    for _ in range(2):  # el evento y la alerta de la acción
-                        received.append(await ws.receive_json(timeout=5))
-            return received
+                async with (
+                    session.ws_connect(f"{self.base_url}/ws/gift-alert") as gift,
+                    session.ws_connect(f"{self.base_url}/ws/event-feed") as feed,
+                ):
+                    for ws in (gift, feed):
+                        self.assertEqual((await ws.receive_json(timeout=5))["type"], "hello")
+                    # Es la misma entrada que usa el botón de Inicio en Qt.
+                    from slbot.connectors.simulator import sample_event
 
-        messages = asyncio.run(flow())
-        channels = {m["channel"] for m in messages}
-        self.assertEqual(channels, {"event", "alert"})
-        alert = next(m for m in messages if m["channel"] == "alert")
-        self.assertEqual(alert["overlay"], "gift-alert")
-        self.assertIn("viewer_demo", alert["title"])
-        self.assertIn("Rose", alert["title"])
+                    ev = sample_event("gift")
+                    ev.data["connector_metadata"] = {"private": "not for overlays"}
+                    self.rt.emit(ev)
+                    alert = await gift.receive_json(timeout=5)
+                    event = await feed.receive_json(timeout=5)
+                    self.assertEqual(alert["channel"], "alert")
+                    self.assertEqual(alert["overlay"], "gift-alert")
+                    self.assertEqual(alert["title"], "viewer_demo envió Rose")
+                    self.assertEqual(alert["text"], "x3")
+                    self.assertEqual(event["channel"], "event")
+                    self.assertEqual(event["data"], {"gift_name": "Rose", "count": 3})
+                    for ws in (gift, feed):
+                        with self.assertRaises(asyncio.TimeoutError):
+                            await ws.receive_json(timeout=0.1)
+
+        asyncio.run(flow())
 
     def test_foreign_origin_is_rejected(self) -> None:
-        async def flow() -> int:
+        async def flow() -> None:
             async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.base_url}/api/test",
-                    json={"sample": "gift"},
-                    headers={"Origin": "https://evil.example"},
-                ) as resp:
-                    return resp.status
+                with self.assertRaises(aiohttp.WSServerHandshakeError) as error:
+                    await session.ws_connect(
+                        f"{self.base_url}/ws/gift-alert", origin="https://foreign.example",
+                    )
+                self.assertEqual(error.exception.status, 403)
 
-        self.assertEqual(asyncio.run(flow()), 403)
+        asyncio.run(flow())
 
-    def test_test_endpoint_requires_json_content_type(self) -> None:
-        async def flow() -> int:
+    def test_simulation_is_not_exposed_over_http(self) -> None:
+        async def flow() -> None:
             async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.base_url}/api/test", data='{"sample":"gift"}', headers={"Content-Type": "text/plain"}
-                ) as resp:
-                    return resp.status
+                async with session.post(f"{self.base_url}/api/test") as response:
+                    self.assertEqual(response.status, 404)
 
-        self.assertEqual(asyncio.run(flow()), 415)
+        asyncio.run(flow())
+
+    def test_legacy_global_socket_and_unknown_overlay_are_unavailable(self) -> None:
+        async def flow() -> None:
+            async with aiohttp.ClientSession() as session:
+                for route in ("/ws", "/ws/not-an-overlay"):
+                    with self.assertRaises(aiohttp.WSServerHandshakeError) as error:
+                        await session.ws_connect(self.base_url + route)
+                    self.assertEqual(error.exception.status, 404)
+
+        asyncio.run(flow())
 
     def test_overlay_files_served_and_traversal_blocked(self) -> None:
         async def flow() -> tuple[int, int, int]:
@@ -189,6 +204,15 @@ class OverlayImportTests(unittest.TestCase):
         info = import_overlay(z)
         self.assertEqual(info.id, "mi-overlay")
         self.assertIn("mi-overlay", list_overlays())
+
+    def test_import_cannot_replace_builtin_overlay(self) -> None:
+        from slbot.overlay_manager import import_overlay, list_overlays
+
+        manifest = json.dumps({"id": "event-feed", "name": "Otro feed"})
+        z = self._make_zip("reserved.zip", {"manifest.json": manifest, "index.html": "<p>otro</p>"})
+        with self.assertRaises(ValueError):
+            import_overlay(z, overwrite=True)
+        self.assertEqual(list_overlays()["event-feed"].source, "builtin")
 
     def test_zip_slip_is_rejected(self) -> None:
         from slbot.overlay_manager import import_overlay

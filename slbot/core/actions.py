@@ -88,10 +88,12 @@ async def _wait(rt: "Runtime", p: dict[str, Any], ev: Event) -> None:
 
 @subaction("overlay_alert")
 async def _overlay_alert(rt: "Runtime", p: dict[str, Any], ev: Event) -> None:
+    overlay_id = str(p.get("overlay", "gift-alert"))
     await rt.overlays.broadcast(
+        overlay_id,
         {
             "channel": "alert",
-            "overlay": str(p.get("overlay", "gift-alert")),
+            "overlay": overlay_id,
             "title": str(p.get("title", "")),
             "text": str(p.get("text", "")),
             "image": str(p.get("image", "")),

@@ -53,9 +53,9 @@ QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests -v
 ## Cómo fluye un evento
 
 ```
-Conector (Twitch/TikTok/...) → Event → EventBus ─┬→ Engine: triggers → acción → pasos
-                                                 └→ Overlays (WebSocket, tipo "event")
-Un paso "overlay_alert" envía un mensaje tipo "alert" a los overlays.
+Conector o botón de prueba (Qt) → Event → EventBus ─┬→ Engine → triggers → acciones
+                                                  └→ Actividad → overlay integrado de últimos eventos
+Una acción "overlay_alert" envía una alerta solo al overlay seleccionado.
 ```
 
 ## Configuración
@@ -101,9 +101,15 @@ script usa el SDK:
 
 ```js
 const color = SLB.param("color", "#ff4d8d");            // opciones desde la URL
-SLB.onEvent("gift", (msg) => { /* msg.user, msg.data.gift_name ... */ });
 SLB.onAlert("mi-overlay", (msg) => { /* msg.title, msg.text */ });
 ```
+
+El SDK se conecta a `/ws/<id>` según la URL del overlay; las URLs de las fuentes de
+navegador en OBS no cambian. Los overlays propios reciben las alertas que las
+acciones les dirigen. El feed integrado de últimos eventos es el único
+suscriptor de actividad de plataforma, con datos limitados a los campos que
+muestra. Si un overlay propio usaba `SLB.onEvent` o se conectaba directamente a
+`/ws`, cámbialo para recibir alertas dirigidas con el SDK actualizado.
 
 Regla de seguridad: muestra siempre nombres y mensajes con `textContent`, nunca
 con `innerHTML`.
@@ -112,5 +118,7 @@ con `innerHTML`.
 
 - El servidor escucha solo en `127.0.0.1` y rechaza peticiones con `Origin` o
   `Host` que no sean locales.
-- Los overlays importados ejecutan JavaScript dentro de OBS: importa solo los
+- El servidor de overlays es de lectura: la simulación se inicia desde la ventana nativa.
+- Los identificadores de los overlays integrados están reservados.
+- Los overlays importados no se ejecutan en un entorno aislado. Ejecutan JavaScript dentro de OBS: importa solo los
   de gente de confianza (la app lo avisa antes de importar).

@@ -9,9 +9,9 @@
  *   SLB.bool("sound", true)           -> booleano
  *
  * Mensajes en vivo:
- *   SLB.onEvent("gift", fn)           -> eventos de plataforma (tipo "gift", "follow", "chat"...; "*" = todos)
+ *   SLB.onEvent("gift", fn)           -> eventos de plataforma (solo feed integrado)
  *   SLB.onAlert("mi-overlay", fn)     -> alertas que una acción envía a este overlay
- *   SLB.onMessage(fn)                 -> todos los mensajes sin filtrar
+ *   SLB.onMessage(fn)                 -> mensajes de esta suscripción
  *
  * IMPORTANTE: usa siempre textContent (no innerHTML) para mostrar nombres y
  * mensajes de los espectadores; así no pueden inyectar HTML en tu stream.
@@ -21,6 +21,7 @@
 
   const query = new URLSearchParams(window.location.search);
   const messageHandlers = [];
+  const overlayPath = window.location.pathname.match(/^\/overlay\/([a-z0-9_-]+)(?:\/|$)/);
 
   function param(name, fallback) {
     return query.has(name) ? query.get(name) : fallback;
@@ -53,7 +54,9 @@
   }
 
   function connect() {
-    const ws = new WebSocket("ws://" + window.location.host + "/ws");
+    if (!overlayPath) return;
+    const scheme = window.location.protocol === "https:" ? "wss://" : "ws://";
+    const ws = new WebSocket(scheme + window.location.host + "/ws/" + overlayPath[1]);
     ws.onmessage = (e) => {
       let msg;
       try {

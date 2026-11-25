@@ -101,7 +101,7 @@ def _load(folder: Path, source: str) -> OverlayInfo:
 
 
 def list_overlays() -> dict[str, OverlayInfo]:
-    """Overlays incluidos y del usuario. Si coinciden en id, gana el del usuario."""
+    """Overlays incluidos y del usuario. Si coinciden en id, gana el integrado."""
     found: dict[str, OverlayInfo] = {}
     for root, source in ((BUILTIN_OVERLAYS, "builtin"), (user_overlays_dir(), "user")):
         if not root.is_dir():
@@ -111,7 +111,7 @@ def list_overlays() -> dict[str, OverlayInfo]:
                 info = _load(folder, source)
             except ValueError:
                 continue  # carpeta que no es un overlay válido
-            found[info.id] = info
+            found.setdefault(info.id, info)
     return found
 
 
@@ -175,6 +175,8 @@ def import_overlay(src: Path, overwrite: bool = False) -> OverlayInfo:
             raise ValueError("Elige una carpeta o un archivo .zip")
 
         data = _parse_manifest(root)
+        if (BUILTIN_OVERLAYS / data["id"]).is_dir():
+            raise ValueError(f"El id '{data['id']}' está reservado para un overlay integrado")
         dest = user_overlays_dir() / data["id"]
         if dest.exists():
             if not overwrite:
