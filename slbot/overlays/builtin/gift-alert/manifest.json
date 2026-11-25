@@ -1,0 +1,12 @@
+{
+  "id": "gift-alert",
+  "name": "Alerta de regalos y donaciones",
+  "description": "Muestra una tarjeta animada cuando una acción envía una alerta (regalos de TikTok, donaciones, seguidores...).",
+  "version": "1.0.0",
+  "author": "Streamer Linux Bot",
+  "params": [
+    { "key": "color", "label": "Color principal", "type": "color", "default": "#ff4d8d" },
+    { "key": "duration", "label": "Duración (segundos)", "type": "number", "default": 5, "min": 1, "max": 30 },
+    { "key": "size", "label": "Tamaño del texto (px)", "type": "number", "default": 42, "min": 16, "max": 120 }
+  ]
+}
