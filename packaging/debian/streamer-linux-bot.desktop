@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Streamer Linux Bot
+Comment=Automatización de streams y overlays para OBS
+Exec=streamer-linux-bot
+Icon=streamer-linux-bot
+Terminal=false
+Categories=AudioVideo;Video;

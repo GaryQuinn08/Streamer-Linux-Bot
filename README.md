@@ -4,36 +4,60 @@ Aplicación de escritorio para Linux que automatiza tu stream: recibe eventos
 (chat, seguidores, regalos, donaciones...), los pasa por **triggers** y ejecuta
 **acciones** (alertas en pantalla, cambios de escena en OBS, sonidos, TTS...).
 
-## Estado actual
+## Beta 0.2.0 para Linux
 
-Esto es un **esqueleto funcional**, no el producto terminado.
+Esta primera beta está preparada para **Debian 13** (verificada en amd64).
+Tiene simulador sin cuenta, dos overlays para OBS, configuración de OBS desde
+la ventana, regla editable de regalos con sonido opcional, importación de
+overlays y tutorial. Twitch, YouTube, Kick, la cola de música y Piper siguen
+pendientes. Los conectores de TikTok son experimentales y no se requieren para
+probar la app. La compatibilidad con otras distribuciones aún no se valida.
 
-| Parte | Estado |
-|---|---|
-| Ventana principal (PySide6) | Funciona: Inicio, Triggers, Acciones, Overlays, Registro |
-| Bus de eventos, triggers (filtros y cooldown), acciones | Funciona y tiene pruebas |
-| Servidor local de overlays + WebSocket (aiohttp) | Funciona y tiene pruebas |
-| Overlays incluidos: alerta de regalos, últimos eventos | Funcionan (sin imagen de vista previa todavía) |
-| Importar overlays (.zip o carpeta) con validación | Funciona y tiene pruebas |
-| Conector de OBS (obs-websocket) | Escrito, **sin probar contra un OBS real** |
-| Twitch, YouTube, Kick, TikTok | **Pendientes** (aparecen como "pendiente de implementar") |
-| Editor visual de triggers y acciones | Pendiente (por ahora se edita `config.json`) |
-| Música (cola de canciones) y TTS con Piper | Pendiente (hay un TTS básico con espeak-ng) |
-| Paquete `.deb` | Pendiente |
+### Instalar
 
-## Requisitos
-
-- Ubuntu/Debian con Python 3.12
-- Librería del sistema para Qt: `sudo apt install libxcb-cursor0`
-
-## Ejecutar
+Descarga el paquete y ejecuta el comando desde la carpeta que lo contiene:
 
 ```bash
-cd ~/Documentos/streamer-linux-bot-v2
-source .venv/bin/activate
-pip install -r requirements.txt     # solo la primera vez
-python run.py
+sudo apt install ./streamer-linux-bot_0.2.0~beta1_all.deb
 ```
+
+Abre **Streamer Linux Bot** desde el menú o con `streamer-linux-bot`. Para
+probar alertas necesitas OBS con **Fuente de navegador** disponible. Para
+controlar escenas y fuentes se usa el WebSocket de OBS Studio v5, configurado
+en **Inicio**; la contraseña se introduce en cada sesión y no se guarda. El
+paquete Debian usa el cliente WebSocket v5 ligero de la app (aiohttp);
+el entorno de desarrollo sigue admitiendo `obsws-python`.
+
+### Compilar o ejecutar desde el código
+
+```bash
+sh packaging/debian/build.sh                       # genera dist/*.deb
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python run.py
+```
+
+### TikTok LIVE experimental
+
+- **TikTok directo (Linux):** requiere instalar el conector de terceros
+  [TikTokLive](https://github.com/isaackogan/TikTokLive) en la carpeta de
+  dependencias del usuario. No se instala automáticamente, no pide tu
+  contraseña y el servicio de firma de terceros puede limitar o interrumpir
+  la conexión. En Debian, si decides probarlo:
+
+  ```bash
+  sudo apt install python3-venv
+  python3 -m venv ~/.local/share/streamer-linux-bot/tiktok-tools
+  ~/.local/share/streamer-linux-bot/tiktok-tools/bin/pip install \
+    --target "${XDG_DATA_HOME:-$HOME/.local/share}/streamer-linux-bot/tiktok-deps" TikTokLive
+  ```
+
+  Reinicia Streamer Linux Bot, elige **TikTok directo** y escribe el @usuario
+  que está en directo. La beta procesa chat, seguidores y regalos.
+- **TikFinity (Event API local):** usa `ws://127.0.0.1:21213/`. La
+  [app oficial de TikFinity](https://tikfinity.com/) ofrece esa API en Windows;
+  en Linux, esta opción requiere que ya tengas un puente que exponga la API
+  en ese puerto local. La beta no instala el puente.
 
 ## Probar que todo funciona
 
@@ -61,8 +85,8 @@ Una acción "overlay_alert" envía una alerta solo al overlay seleccionado.
 ## Configuración
 
 `~/.config/streamer-linux-bot/config.json` (se crea al primer arranque).
-Contiene ajustes, triggers y acciones. Puede incluir la contraseña de OBS, así
-que el archivo se guarda con permisos 600.
+Contiene ajustes, triggers y acciones. El archivo se guarda con permisos
+600 y no incluye la contraseña de OBS.
 
 Ejemplo de trigger:
 

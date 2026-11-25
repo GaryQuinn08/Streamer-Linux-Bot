@@ -39,8 +39,11 @@ class OverlayInfo:
 
     @property
     def preview_path(self) -> Path | None:
-        candidate = self.path / "preview.png"
-        return candidate if candidate.is_file() else None
+        for name in ("preview.png", "preview.svg"):
+            candidate = self.path / name
+            if candidate.is_file():
+                return candidate
+        return None
 
     def to_dict(self) -> dict[str, Any]:
         return {

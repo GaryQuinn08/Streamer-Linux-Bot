@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import functools
 import json
+import re
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -27,6 +28,8 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QSpinBox,
+    QScrollArea,
+    QGroupBox,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -52,6 +55,7 @@ class LogBridge(QObject):
     """Puente seguro entre hilos: el runtime emite, la interfaz recibe."""
 
     message = Signal(str)
+    gift_save_done = Signal(str)
 
 
 # --------------------------------------------------------------------------
@@ -62,7 +66,13 @@ class HomeTab(QWidget):
     def __init__(self, runtime: Runtime) -> None:
         super().__init__()
         self.rt = runtime
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        body = QWidget()
+        layout = QVBoxLayout(body)
+        scroll.setWidget(body)
+        outer.addWidget(scroll)
 
         self.server_label = QLabel()
         self.server_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -76,15 +86,63 @@ class HomeTab(QWidget):
         self.table.verticalHeader().setVisible(False)
         layout.addWidget(self.table)
 
-        obs_row = QHBoxLayout()
-        connect_obs = QPushButton("Conectar OBS")
-        connect_obs.clicked.connect(lambda: self.rt.submit(self.rt.obs.start()))
-        disconnect_obs = QPushButton("Desconectar OBS")
-        disconnect_obs.clicked.connect(lambda: self.rt.submit(self.rt.obs.stop()))
-        obs_row.addWidget(connect_obs)
-        obs_row.addWidget(disconnect_obs)
-        obs_row.addStretch(1)
-        layout.addLayout(obs_row)
+        obs_group = QGroupBox("OBS Studio")
+        obs_form = QFormLayout(obs_group)
+        obs_cfg = runtime.config.settings["obs"]
+        self.obs_host = QLineEdit(str(obs_cfg["host"]))
+        self.obs_host.setObjectName("obsHost")
+        self.obs_port = QSpinBox()
+        self.obs_port.setRange(1, 65535)
+        try:
+            self.obs_port.setValue(int(obs_cfg["port"]))
+        except (TypeError, ValueError):
+            self.obs_port.setValue(4455)
+        self.obs_password = QLineEdit()
+        self.obs_password.setObjectName("obsPassword")
+        self.obs_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.obs_password.setPlaceholderText("Solo para esta sesión; no se guarda")
+        obs_form.addRow("Dirección:", self.obs_host)
+        obs_form.addRow("Puerto:", self.obs_port)
+        obs_form.addRow("Contraseña:", self.obs_password)
+
+        row = QHBoxLayout()
+        self.connect_obs = QPushButton("Conectar OBS")
+        self.connect_obs.clicked.connect(self._connect_obs)
+        self.disconnect_obs = QPushButton("Desconectar OBS")
+        self.disconnect_obs.clicked.connect(lambda: self.rt.submit(self.rt.obs.stop()))
+        row.addWidget(self.connect_obs)
+        row.addWidget(self.disconnect_obs)
+        row.addStretch(1)
+        obs_form.addRow(row)
+        obs_hint = QLabel("En OBS: Herramientas → Ajustes del servidor WebSocket → Activar. "
+                          "Una fuente de navegador no necesita esta conexión; "
+                          "solo las acciones que controlan escenas o fuentes.")
+        obs_hint.setWordWrap(True)
+        obs_form.addRow(obs_hint)
+        layout.addWidget(obs_group)
+
+        tiktok_group = QGroupBox("TikTok LIVE · experimental")
+        tiktok_form = QFormLayout(tiktok_group)
+        self.tiktok_mode = QComboBox()
+        self.tiktok_mode.addItem("TikTok directo (conector opcional)", "directo")
+        self.tiktok_mode.addItem("TikFinity (Event API local)", "tikfinity")
+        self.tiktok_channel = QLineEdit()
+        self.tiktok_channel.setPlaceholderText("@usuario en directo")
+        self.tiktok_mode.currentIndexChanged.connect(
+            lambda: self.tiktok_channel.setEnabled(self.tiktok_mode.currentData() == "directo")
+        )
+        tiktok_form.addRow("Conector:", self.tiktok_mode)
+        tiktok_form.addRow("Usuario:", self.tiktok_channel)
+        tiktok_row = QHBoxLayout()
+        connect_tiktok = QPushButton("Conectar TikTok")
+        connect_tiktok.clicked.connect(self._connect_tiktok)
+        disconnect_tiktok = QPushButton("Desconectar TikTok")
+        disconnect_tiktok.clicked.connect(lambda: self.rt.submit(self.rt.connectors["tiktok"].stop()))
+        tiktok_row.addWidget(connect_tiktok)
+        tiktok_row.addWidget(disconnect_tiktok)
+        tiktok_row.addStretch(1)
+        tiktok_form.addRow(tiktok_row)
+        layout.addWidget(tiktok_group)
 
         layout.addWidget(QLabel("<b>Enviar un evento de prueba</b> (pasa por los triggers y los overlays)"))
         tests = QHBoxLayout()
@@ -101,11 +159,27 @@ class HomeTab(QWidget):
         timer.timeout.connect(self.refresh)
         timer.start(1000)
 
+    def _connect_obs(self) -> None:
+        host = self.obs_host.text().strip()
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]{0,252}", host):
+            QMessageBox.warning(self, "Dirección de OBS", "Escribe una IP IPv4 o un nombre de equipo.")
+            return
+        password = self.obs_password.text()
+        self.obs_password.clear()
+        self.connect_obs.setEnabled(False)
+        self.rt.submit(self.rt.obs.start(host, self.obs_port.value(), password))
+
+    def _connect_tiktok(self) -> None:
+        self.rt.submit(self.rt.connectors["tiktok"].start(
+            self.tiktok_mode.currentData(), self.tiktok_channel.text()
+        ))
+
     def _send_sample(self, kind: str) -> None:
         self.rt.emit(sample_event(kind))
 
     def refresh(self) -> None:
         self.server_label.setText(f"Servidor de overlays: http://127.0.0.1:{self.rt.port}/")
+        self.connect_obs.setEnabled(self.rt.obs.status != "conectando…")
         connectors = list(self.rt.connectors.values())
         if self.table.rowCount() != len(connectors):
             self.table.setRowCount(len(connectors))
@@ -119,42 +193,122 @@ class HomeTab(QWidget):
 # --------------------------------------------------------------------------
 
 class TriggersTab(QWidget):
-    def __init__(self, runtime: Runtime) -> None:
+    def __init__(self, runtime: Runtime, bridge: LogBridge) -> None:
         super().__init__()
+        self.rt = runtime
+        self.bridge = bridge
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Triggers configurados (el editor visual llegará en una fase posterior; "
-                                "por ahora se editan en config.json)."))
-        table = QTableWidget(0, 7)
-        table.setHorizontalHeaderLabels(["Nombre", "Plataforma", "Evento", "Filtros", "Cooldown (s)", "Acción", "Activo"])
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        table.verticalHeader().setVisible(False)
-        triggers = runtime.config.triggers
-        table.setRowCount(len(triggers))
+        editor = QGroupBox("Regla rápida: regalos de TikTok")
+        form = QFormLayout(editor)
+        trigger = next((t for t in runtime.config.triggers if t.id == "tiktok-gift"), None)
+        action = runtime.config.action_by_id(trigger.action_id if trigger else "alert-gift")
+        step = next((s for s in action.steps if s.get("type") == "overlay_alert"
+                     and s.get("overlay", "gift-alert") == "gift-alert"), {}) if action else {}
+        self.enabled_rule = QCheckBox()
+        self.enabled_rule.setChecked(trigger.enabled if trigger else True)
+        self.gift_name = QLineEdit(str(trigger.filters.get("gift_name", "")) if trigger else "")
+        self.gift_name.setPlaceholderText("En blanco: cualquier regalo. Ejemplo: Rose")
+        self.cooldown = QSpinBox()
+        self.cooldown.setRange(0, 3600)
+        self.cooldown.setValue(int(trigger.cooldown_s) if trigger else 0)
+        self.title = QLineEdit(str(step.get("title", "{user} envió {gift_name}")))
+        sound = next((s.get("file", "") for s in action.steps
+                      if s.get("id") == "quick-gift-sound"), "") if action else ""
+        self.sound = QLineEdit(str(sound))
+        self.sound.setPlaceholderText("Opcional. Vacío: sin sonido")
+        sound_row = QHBoxLayout()
+        sound_row.addWidget(self.sound)
+        pick = QPushButton("Elegir…")
+        pick.clicked.connect(self._pick_sound)
+        sound_row.addWidget(pick)
+        form.addRow("Activar:", self.enabled_rule)
+        form.addRow("Nombre del regalo:", self.gift_name)
+        form.addRow("Espera mínima (s):", self.cooldown)
+        form.addRow("Título del overlay:", self.title)
+        form.addRow("Archivo de sonido:", sound_row)
+        self.save_button = QPushButton("Guardar regla")
+        self.save_button.clicked.connect(self._save_rule)
+        form.addRow(self.save_button)
+        self.result = QLabel("El botón de Inicio simula Rose ×3. Usa «Rose» o deja el filtro vacío para probar.")
+        self.result.setWordWrap(True)
+        form.addRow(self.result)
+        layout.addWidget(editor)
+        self.table = QTableWidget(0, 7)
+        self.table.setHorizontalHeaderLabels(["Nombre", "Plataforma", "Evento", "Filtros", "Cooldown (s)", "Acción", "Activo"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.verticalHeader().setVisible(False)
+        layout.addWidget(self.table)
+        self.bridge.gift_save_done.connect(self._saved)
+        self._refresh()
+
+    def _refresh(self) -> None:
+        triggers = self.rt.config.triggers
+        self.table.setRowCount(len(triggers))
         for row, t in enumerate(triggers):
             values = [t.name, t.platform, t.event_type, json.dumps(t.filters, ensure_ascii=False),
                       str(t.cooldown_s), t.action_id, "sí" if t.enabled else "no"]
             for col, value in enumerate(values):
-                table.setItem(row, col, QTableWidgetItem(value))
-        layout.addWidget(table)
+                self.table.setItem(row, col, QTableWidgetItem(value))
+
+    def _pick_sound(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Elegir sonido", "", "Audio (*.wav *.ogg *.mp3 *.flac);;Todos (*)")
+        if path:
+            self.sound.setText(path)
+
+    def _save_rule(self) -> None:
+        title, sound = self.title.text().strip(), self.sound.text().strip()
+        if not title or (sound and not Path(sound).expanduser().is_file()):
+            self.result.setText("Escribe un título y elige un archivo de sonido que exista (u omítelo).")
+            return
+        self.save_button.setEnabled(False)
+        future = self.rt.submit(self.rt.save_gift_rule(
+            self.enabled_rule.isChecked(), self.gift_name.text().strip(),
+            self.cooldown.value(), title, str(Path(sound).expanduser().resolve()) if sound else "",
+        ))
+        bridge = self.bridge
+
+        def done(completed) -> None:
+            if completed.cancelled():
+                return
+            error = completed.exception()
+            bridge.gift_save_done.emit(str(error) if error else "")
+
+        future.add_done_callback(done)
+
+    def _saved(self, error: str) -> None:
+        self.save_button.setEnabled(True)
+        self.result.setText(f"No se pudo guardar: {error}" if error else "Regla guardada. Prueba el regalo desde Inicio.")
+        if not error:
+            self._refresh()
 
 
 class ActionsTab(QWidget):
-    def __init__(self, runtime: Runtime) -> None:
+    def __init__(self, runtime: Runtime, bridge: LogBridge) -> None:
         super().__init__()
+        self.rt = runtime
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Acciones configuradas y sus pasos."))
-        tree = QTreeWidget()
-        tree.setHeaderLabels(["Acción / paso", "Detalle"])
-        tree.header().setSectionResizeMode(QHeaderView.ResizeToContents)
-        for action in runtime.config.actions:
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels(["Acción / paso", "Detalle"])
+        self.tree.header().setSectionResizeMode(QHeaderView.ResizeToContents)
+        layout.addWidget(self.tree)
+        bridge.gift_save_done.connect(self._saved)
+        self._refresh()
+
+    def _saved(self, error: str) -> None:
+        if not error:
+            self._refresh()
+
+    def _refresh(self) -> None:
+        self.tree.clear()
+        for action in self.rt.config.actions:
             parent = QTreeWidgetItem([f"{action.name}  ({action.id})", ""])
-            tree.addTopLevelItem(parent)
+            self.tree.addTopLevelItem(parent)
             for i, step in enumerate(action.steps, start=1):
                 detail = ", ".join(f"{k}={v}" for k, v in step.items() if k != "type")
                 parent.addChild(QTreeWidgetItem([f"{i}. {step.get('type', '?')}", detail]))
-            parent.setExpanded(True)
-        layout.addWidget(tree)
+        self.tree.expandAll()
 
 
 # --------------------------------------------------------------------------
@@ -276,8 +430,9 @@ class OverlaysTab(QWidget):
         self.title.setText(info.name)
         self.desc.setText(info.description)
         preview = info.preview_path
-        if preview:
-            self.preview.setPixmap(QPixmap(str(preview)).scaledToHeight(160, Qt.SmoothTransformation))
+        pixmap = QPixmap(str(preview)) if preview else QPixmap()
+        if not pixmap.isNull():
+            self.preview.setPixmap(pixmap.scaledToHeight(160, Qt.SmoothTransformation))
         else:
             self.preview.setPixmap(QPixmap())
             self.preview.setText("(sin vista previa)")
@@ -414,8 +569,23 @@ class MainWindow(QMainWindow):
 
         tabs = QTabWidget()
         tabs.addTab(HomeTab(runtime), "Inicio")
-        tabs.addTab(TriggersTab(runtime), "Triggers")
-        tabs.addTab(ActionsTab(runtime), "Acciones")
+        tabs.addTab(TriggersTab(runtime, bridge), "Triggers")
+        tabs.addTab(ActionsTab(runtime, bridge), "Acciones")
         tabs.addTab(OverlaysTab(runtime), "Overlays")
         tabs.addTab(self.log_view, "Registro")
+        guide = QLabel(
+            "<h2>Tu primera alerta</h2>"
+            "<ol><li>En <b>Overlays</b>, selecciona <b>Alerta de regalos</b> y copia su URL.</li>"
+            "<li>En OBS, añade una <b>Fuente de navegador</b>, pega la URL y deja la fuente visible.</li>"
+            "<li>Vuelve a <b>Inicio</b> y pulsa <b>Regalo (TikTok)</b> para simular una Rosa ×3.</li>"
+            "<li>En <b>Triggers</b> puedes cambiar el título, el filtro y el sonido de la alerta.</li></ol>"
+            "<p>Si no aparece, revisa que el navegador de OBS tenga la URL correcta y vuelve a pulsar "
+            "el botón con la fuente visible. El resultado también se registra en <b>Registro</b>.</p>"
+            "<p>Los eventos simulados no necesitan una cuenta. La conexión de OBS por WebSocket "
+            "es independiente de la fuente de navegador.</p>"
+        )
+        guide.setWordWrap(True)
+        guide.setMargin(18)
+        guide.setAlignment(Qt.AlignTop)
+        tabs.addTab(guide, "Primeros pasos")
         self.setCentralWidget(tabs)

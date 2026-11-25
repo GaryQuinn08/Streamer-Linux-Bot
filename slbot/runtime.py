@@ -9,6 +9,7 @@ p. ej. una señal de Qt).
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
 import threading
 import time
@@ -17,8 +18,9 @@ from typing import Any, Callable, Coroutine
 
 from .connectors.base import Connector
 from .connectors.obs import ObsConnector
-from .connectors.platforms import KickConnector, TiktokConnector, TwitchConnector, YoutubeConnector
-from .core.config import Config
+from .connectors.platforms import KickConnector, TwitchConnector, YoutubeConnector
+from .connectors.tiktok import TiktokConnector
+from .core.config import Config, DEFAULT_ACTIONS, DEFAULT_TRIGGERS, Action, Trigger
 from .core.engine import Engine
 from .core.events import Event, EventBus
 from .overlay_server import OverlayServer
@@ -86,6 +88,40 @@ class Runtime:
     def emit(self, ev: Event) -> None:
         self.submit(self.bus.publish(ev))
 
+    async def save_gift_rule(self, enabled: bool, gift_name: str, cooldown: int,
+                             title: str, sound: str = "") -> None:
+        triggers = copy.deepcopy(self.config.triggers)
+        actions = copy.deepcopy(self.config.actions)
+        trigger = next((t for t in triggers if t.id == "tiktok-gift"), None)
+        if trigger is None:
+            trigger = Trigger.from_dict(copy.deepcopy(DEFAULT_TRIGGERS[0]))
+            triggers.append(trigger)
+        action = next((a for a in actions if a.id == trigger.action_id), None)
+        if action is None:
+            action = Action(trigger.action_id, "Alerta de regalo",
+                            copy.deepcopy(DEFAULT_ACTIONS[0]["steps"]))
+            actions.append(action)
+        trigger.enabled = enabled
+        trigger.cooldown_s = cooldown
+        if gift_name:
+            trigger.filters["gift_name"] = gift_name
+        else:
+            trigger.filters.pop("gift_name", None)
+        step = next((s for s in action.steps if s.get("type") == "overlay_alert"
+                     and s.get("overlay", "gift-alert") == "gift-alert"), None)
+        if step is None:
+            step = {"type": "overlay_alert", "overlay": "gift-alert", "text": "x{count}"}
+            action.steps.insert(0, step)
+        step["title"] = title
+        action.steps = [s for s in action.steps if s.get("id") != "quick-gift-sound"]
+        if sound:
+            action.steps.append({"type": "play_sound", "id": "quick-gift-sound", "file": sound})
+        saved = Config(settings=self.config.settings, triggers=triggers,
+                       actions=actions, path=self.config.path)
+        saved.save()
+        self.config.triggers, self.config.actions = triggers, actions
+        self.log("Regla de regalos actualizada.")
+
     # -- ciclo de vida -----------------------------------------------------
 
     def start(self, timeout: float = 10.0) -> None:
@@ -128,8 +164,10 @@ class Runtime:
             self.spawn(self.obs.start())
 
     async def _shutdown(self) -> None:
-        for task in list(self._background):
+        tasks = list(self._background)
+        for task in tasks:
             task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
         for connector in self.connectors.values():
             await connector.stop()
         await self.overlays.stop()

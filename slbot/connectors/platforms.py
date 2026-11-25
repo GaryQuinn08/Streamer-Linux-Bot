@@ -8,8 +8,6 @@ Plan por plataforma:
   - Twitch:  EventSub por WebSocket + inicio de sesión OAuth del propio usuario.
   - YouTube: API de YouTube Live Chat + OAuth de Google.
   - Kick:    API pública de Kick (aún cambia con frecuencia).
-  - TikTok:  librería TikTokLive (no oficial; TikTok puede romperla) o la
-             conexión local a TikFinity. Decidir y probar antes de comprometerse.
 """
 from __future__ import annotations
 
@@ -38,7 +36,3 @@ class YoutubeConnector(_PendingConnector):
 
 class KickConnector(_PendingConnector):
     name = "kick"
-
-
-class TiktokConnector(_PendingConnector):
-    name = "tiktok"

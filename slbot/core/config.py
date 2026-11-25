@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import math
 import os
 import shutil
 from dataclasses import dataclass, field
@@ -52,6 +53,9 @@ class Trigger:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Trigger":
+        cooldown = float(d.get("cooldown_s", 0))
+        if not math.isfinite(cooldown) or cooldown < 0:
+            raise ValueError("Cooldown inválido")
         return cls(
             id=str(d["id"]),
             event_type=str(d["event_type"]),
@@ -60,7 +64,7 @@ class Trigger:
             enabled=bool(d.get("enabled", True)),
             platform=str(d.get("platform", "*")),
             filters=dict(d.get("filters", {})),
-            cooldown_s=float(d.get("cooldown_s", 0)),
+            cooldown_s=cooldown,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -86,7 +90,10 @@ class Action:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Action":
-        return cls(id=str(d["id"]), name=str(d.get("name", d["id"])), steps=list(d.get("steps", [])))
+        steps = d.get("steps", [])
+        if not isinstance(steps, list) or any(not isinstance(step, dict) for step in steps):
+            raise ValueError("Cada paso de una acción debe ser un objeto")
+        return cls(id=str(d["id"]), name=str(d.get("name", d["id"])), steps=steps)
 
     def to_dict(self) -> dict[str, Any]:
         return {"id": self.id, "name": self.name, "steps": self.steps}
@@ -94,7 +101,7 @@ class Action:
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "overlay_port": 8765,
-    "obs": {"host": "127.0.0.1", "port": 4455, "password": "", "autoconnect": False},
+    "obs": {"host": "127.0.0.1", "port": 4455, "autoconnect": False},
 }
 
 DEFAULT_ACTIONS: list[dict[str, Any]] = [
@@ -178,28 +185,66 @@ class Config:
             cfg.path = path
             return cfg
 
-        cfg = cls(settings=_merge(DEFAULT_SETTINGS, raw.get("settings", {})), path=path)
-        for item in raw.get("triggers", []):
+        if not isinstance(raw, dict):
+            log.error("La configuración no es un objeto JSON. Se usan los ajustes predeterminados.")
+            cfg = cls.defaults()
+            cfg.path = path
+            return cfg
+        settings = raw.get("settings")
+        cfg = cls(settings=_merge(DEFAULT_SETTINGS, settings if isinstance(settings, dict) else {}), path=path)
+        if not isinstance(cfg.settings["obs"], dict):
+            cfg.settings["obs"] = copy.deepcopy(DEFAULT_SETTINGS["obs"])
+        legacy_obs = cfg.settings["obs"]
+        if "password" in legacy_obs:
+            legacy_obs.pop("password")
+            legacy_obs["autoconnect"] = False
+            # Nunca persiste secretos de una configuración antigua.
+            try:
+                cfg._remove_legacy_obs_password(raw)
+            except OSError as exc:
+                log.warning("No se pudo retirar del archivo la contraseña antigua de OBS: %s", exc)
+        for item in raw["triggers"] if isinstance(raw.get("triggers"), list) else []:
             try:
                 cfg.triggers.append(Trigger.from_dict(item))
             except (KeyError, TypeError, ValueError):
                 log.warning("Trigger inválido omitido: %r", item)
-        for item in raw.get("actions", []):
+        for item in raw["actions"] if isinstance(raw.get("actions"), list) else []:
             try:
                 cfg.actions.append(Action.from_dict(item))
             except (KeyError, TypeError, ValueError):
                 log.warning("Acción inválida omitida: %r", item)
         return cfg
 
+    def _remove_legacy_obs_password(self, raw: dict[str, Any]) -> None:
+        """Migra el secreto sin reinterpretar ni perder otros campos del archivo."""
+        old = raw["settings"]["obs"]
+        old.pop("password", None)
+        old["autoconnect"] = False
+        self._write(self.path, raw)
+
+    @staticmethod
+    def _write(path: Path, data: dict[str, Any]) -> None:
+        import tempfile
+
+        descriptor, name = tempfile.mkstemp(prefix=".config-", suffix=".tmp", dir=path.parent)
+        temporary = Path(name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as file:
+                json.dump(data, file, indent=2, ensure_ascii=False)
+                file.write("\n")
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
     def save(self, path: Path | None = None) -> None:
         path = path or self.path or (config_dir() / "config.json")
-        data = {
-            "settings": self.settings,
+        settings = copy.deepcopy(self.settings)
+        if isinstance(settings.get("obs"), dict) and "password" in settings["obs"]:
+            settings["obs"].pop("password")
+            settings["obs"]["autoconnect"] = False
+        self._write(path, {
+            "settings": settings,
             "triggers": [t.to_dict() for t in self.triggers],
             "actions": [a.to_dict() for a in self.actions],
-        }
-        tmp = path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), "utf-8")
-        os.chmod(tmp, 0o600)  # puede contener la contraseña de OBS
-        tmp.replace(path)
+        })
         self.path = path
