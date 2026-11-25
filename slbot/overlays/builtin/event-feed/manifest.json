@@ -1,0 +1,12 @@
+{
+  "id": "event-feed",
+  "name": "Últimos eventos",
+  "description": "Lista en pantalla la actividad reciente de todas las plataformas (chat, seguidores, regalos, donaciones...).",
+  "version": "1.0.0",
+  "author": "Streamer Linux Bot",
+  "params": [
+    { "key": "color", "label": "Color de acento", "type": "color", "default": "#4dd0ff" },
+    { "key": "max", "label": "Líneas visibles", "type": "number", "default": 6, "min": 1, "max": 20 },
+    { "key": "size", "label": "Tamaño del texto (px)", "type": "number", "default": 22, "min": 10, "max": 60 }
+  ]
+}

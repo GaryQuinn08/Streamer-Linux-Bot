@@ -1,0 +1,40 @@
+:root {
+  --accent: #4dd0ff;
+  --size: 22px;
+}
+
+html, body {
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: "Segoe UI", "Noto Sans", Arial, sans-serif;
+}
+
+#feed {
+  list-style: none;
+  margin: 0;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#feed li {
+  font-size: var(--size);
+  color: #fff;
+  background: rgba(10, 10, 14, 0.75);
+  border-left: 5px solid var(--accent);
+  padding: 4px 12px;
+  border-radius: 6px;
+  animation: slide-in 0.25s ease-out both;
+}
+
+#feed .who {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}

@@ -1,0 +1,57 @@
+:root {
+  --accent: #ff4d8d;
+  --size: 42px;
+}
+
+html, body {
+  margin: 0;
+  background: transparent; /* OBS respeta la transparencia */
+  overflow: hidden;
+  font-family: "Segoe UI", "Noto Sans", Arial, sans-serif;
+}
+
+#stage {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 8%;
+  display: flex;
+  justify-content: center;
+}
+
+.alert {
+  padding: 0.5em 1.1em;
+  border-radius: 18px;
+  border: 3px solid var(--accent);
+  background: rgba(10, 10, 14, 0.82);
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 0 24px var(--accent);
+  animation: pop-in 0.35s ease-out both;
+}
+
+.alert.leaving {
+  animation: pop-out 0.35s ease-in both;
+}
+
+.alert .title {
+  font-size: var(--size);
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1.15;
+}
+
+.alert .text {
+  font-size: calc(var(--size) * 0.62);
+  margin-top: 0.15em;
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(30px) scale(0.85); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes pop-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(-20px) scale(0.9); }
+}
