@@ -10,6 +10,9 @@
   const ranges = { duration: [0, 300], size: [12, 72], max: [1, 24], opacity: [0, 100] };
   const labelLimits = { name: 60, title: 220, body: 380 };
   const validId = /^[a-z0-9][a-z0-9-]{0,63}$/;
+  const githubLogin = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
+  const requestedCreator = new URLSearchParams(location.search).get("creador") || "";
+  const selectedCreator = validId.test(requestedCreator) ? requestedCreator : "";
   const chips = Array.from(document.querySelectorAll("[data-mode].chip"));
   const knownIds = new Set();
   let favorites = loadFavorites();
@@ -60,14 +63,19 @@
     }
     const description = safeText(entry.description, 240);
     const author = safeText(entry.author, 80) || "Comunidad";
+    const creatorId = typeof entry.creatorId === "string" && validId.test(entry.creatorId) ? entry.creatorId : "";
+    const official = creatorId === "streamer-linux-bot";
+    const candidate = typeof entry.submittedBy === "string" ? entry.submittedBy : "";
+    const issue = Number.isSafeInteger(entry.sourceIssue) && entry.sourceIssue > 0 ? entry.sourceIssue : 0;
+    const submittedBy = issue && githubLogin.test(candidate) ? candidate : "";
     const license = safeText(entry.license, 35) || "Sin licencia indicada";
     const topics = Array.isArray(entry.topics) ? entry.topics.slice(0, 16).map((word) => safeText(word, 35)).join(" ") : "";
     const renderArt = artKeys.has(entry.art) ? entry.art : "orbit";
     const shape = shapeKeys.has(entry.shape) ? entry.shape : "square";
     const example = entry.example === "follow" || entry.example === "donation" ? entry.example : "gift";
     knownIds.add(entry.id);
-    return { id: entry.id, description, author, license, renderArt, shape, preset, example,
-      index: normalized([name, description, author, modes[preset.mode], topics].join(" ")) };
+    return { id: entry.id, description, author, creatorId, official, submittedBy, issue, license, renderArt, shape, preset, example,
+      index: normalized([name, description, author, submittedBy, modes[preset.mode], topics].join(" ")) };
   }
 
   function normalized(text) {
@@ -210,7 +218,20 @@
     const body = add(card, "div", "", "pin-body");
     add(body, "h2", model.preset.name, "pin-name");
     add(body, "p", model.description, "description");
-    add(body, "p", model.author + " · " + model.license, "meta");
+    const credit = add(body, "p", "Diseño de ", "meta");
+    if (model.creatorId) {
+      const profile = add(credit, "a", model.author);
+      profile.href = "./?creador=" + encodeURIComponent(model.creatorId);
+    } else add(credit, "span", model.author);
+    if (model.official) add(credit, "span", " · Colección oficial");
+    add(credit, "span", " · " + model.license);
+    if (model.submittedBy) {
+      const contribution = add(body, "p", "Compartido por ", "meta");
+      const owner = add(contribution, "a", "@" + model.submittedBy);
+      owner.href = "https://github.com/" + encodeURIComponent(model.submittedBy);
+      const origin = add(contribution, "a", " · Ver aporte");
+      origin.href = "https://github.com/GaryQuinn08/Streamer-Linux-Bot/issues/" + model.issue;
+    }
     const actions = add(body, "div", "", "pin-actions");
     const edit = add(actions, "a", "Personalizar", "button primary");
     edit.href = target;
@@ -232,6 +253,7 @@
     if (!isLoaded) return;
     const words = normalized(get("search").value).split(/\s+/).filter(Boolean);
     const matches = catalogue.filter((card) => {
+      if (selectedCreator && selectedCreator !== card.creatorId) return false;
       if (savedOnly && !favorites.has(card.id)) return false;
       if (selectedMode !== "all" && selectedMode !== card.preset.mode) return false;
       return words.every((word) => card.index.includes(word));
@@ -241,7 +263,8 @@
     get("empty").hidden = matches.length > 0;
     if (!matches.length) {
       const noneSaved = savedOnly && !catalogue.some((card) => favorites.has(card.id));
-      get("empty-title").textContent = noneSaved ? "Todavía no tienes favoritos" : "No encontramos diseños";
+      const missing = selectedCreator && !catalogue.some(card => card.creatorId === selectedCreator);
+      get("empty-title").textContent = missing ? "No encontramos este perfil" : noneSaved ? "Todavía no tienes favoritos" : "No encontramos diseños";
       get("empty-body").textContent = noneSaved
         ? "Pulsa el corazón de un diseño para guardarlo en este navegador."
         : "Prueba con otra búsqueda o elige una categoría distinta.";
@@ -253,6 +276,7 @@
   get("search").addEventListener("input", render);
   get("favorites").addEventListener("click", () => { savedOnly = !savedOnly; selectedMode = "all"; render(); });
   get("clear-filters").addEventListener("click", () => {
+    if (selectedCreator) { location.assign("./"); return; }
     get("search").value = "";
     selectedMode = "all";
     savedOnly = false;
@@ -266,6 +290,17 @@
   }).then((entries) => {
     if (!Array.isArray(entries)) throw Error("Catálogo inválido");
     catalogue = entries.slice(0, 200).map(modelFrom).filter(Boolean);
+    if (selectedCreator) {
+      const creator = catalogue.find(item => item.creatorId === selectedCreator);
+      if (creator) {
+        get("gallery-title").textContent = creator.author;
+        get("gallery-description").textContent = creator.official
+          ? "Diseños de la colección oficial de Streamer Linux Bot."
+          : "Diseños atribuidos a este creador y publicados tras revisión.";
+        document.title = creator.author + " · Galería de overlays";
+      }
+      get("leave-creator").hidden = false;
+    }
     for (const item of catalogue) item.node = createCard(item);
     isLoaded = true;
     get("designs").setAttribute("aria-busy", "false");

@@ -20,6 +20,17 @@ el HTML que suban otras personas.
 4. Un mantenedor revisa el diseño y lo incorpora al catálogo. Una vez
    publicado, cualquiera puede abrirlo en el editor y descargar su copia.
 
+## Créditos y perfiles
+
+**Diseño de** indica a quién se le atribuye la pieza. **Compartido por**
+señala la cuenta que envió el aporte, que puede ser distinta. El mantenedor
+establece `creatorId` al revisar el crédito. Si hay un issue público,
+añade `sourceIssue` con su número y `submittedBy` con el usuario que
+GitHub muestra como autor del issue, no con un nombre escrito en el cuerpo.
+Para propuestas por PR sin issue, no inventes un remitente: conserva el
+crédito del diseño. Los perfiles son páginas públicas del catálogo; no
+son cuentas nuevas ni requieren iniciar sesión para ver o descargar.
+
 ## Campos permitidos
 
 El objeto `preset` acepta solo `mode` (`alert`, `chat`, `events`), nombre,
