@@ -28,6 +28,14 @@ en **Inicio**; la contraseña se introduce en cada sesión y no se guarda. El
 paquete Debian usa el cliente WebSocket v5 ligero de la app (aiohttp);
 el entorno de desarrollo sigue admitiendo `obsws-python`.
 
+### Si APT no encuentra `python3-pyside6.qtwidgets`
+
+No agregues repositorios de otra distribución. Usa la variante ZIP, que
+instala PySide6 en un entorno de Python de tu cuenta. Se construye con
+`sh packaging/portable/build.sh` y se instala con `bash instalar.sh`
+después de extraerla. Consulta `INSTALAR.txt` dentro del ZIP para los
+requisitos del sistema. Se requiere Python 3.11 o superior e Internet.
+
 ### Compilar o ejecutar desde el código
 
 ```bash
