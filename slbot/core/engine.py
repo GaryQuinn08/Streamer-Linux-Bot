@@ -4,7 +4,6 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
-from .actions import run_action
 from .events import Event
 
 if TYPE_CHECKING:
@@ -33,4 +32,4 @@ class Engine:
                 continue
 
             self.rt.log(f"Trigger '{trigger.name}' -> acción '{action.name}'")
-            self.rt.spawn(run_action(self.rt, action, ev))
+            self.rt.spawn(self.rt.execute_action(action, ev, trigger.name))

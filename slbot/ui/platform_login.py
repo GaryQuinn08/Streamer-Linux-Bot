@@ -27,7 +27,7 @@ class PlatformLoginPanel(QGroupBox):
         self.configured = {key: self._available(key) for key in ("twitch", "youtube")}
         self.open_requested.connect(self._open_in_desktop, Qt.ConnectionType.QueuedConnection)
         layout = QVBoxLayout(self)
-        details = QLabel("Pulsa Conectar y autoriza en el sitio oficial. El bot no te pedirá credenciales "
+        details = QLabel("Cuando la conexión esté disponible, pulsa Conectar y autoriza en el sitio oficial. El bot no te pedirá credenciales "
                          "de desarrollador, contraseñas ni tokens.")
         details.setWordWrap(True)
         layout.addWidget(details)
@@ -102,7 +102,7 @@ class PlatformLoginPanel(QGroupBox):
             available = bool(self.configured[key])
             connect.setEnabled(not busy and available)
             if not available and not busy:
-                label.setText("No habilitado en esta instalación. Falta el registro de Streamer Linux Bot.")
+                label.setText("No disponible en esta beta: la distribución aún no incluye el acceso de Streamer Linux Bot. No tienes que registrarte como desarrollador.")
             else:
                 label.setText(connector.status)
             disconnect.setEnabled(busy)

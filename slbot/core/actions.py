@@ -57,12 +57,14 @@ def render(value: Any, ctx: dict[str, str]) -> Any:
     return _TEMPLATE.sub(lambda m: ctx.get(m.group(1), m.group(0)), value)
 
 
-async def run_action(rt: "Runtime", action: Action, ev: Event) -> None:
+async def run_action(rt: "Runtime", action: Action, ev: Event) -> int:
+    failures = 0
     ctx = build_context(ev)
     for index, step in enumerate(action.steps, start=1):
         step_type = step.get("type")
         handler = _HANDLERS.get(str(step_type))
         if handler is None:
+            failures += 1
             rt.log(f"[{action.name}] paso {index}: tipo desconocido '{step_type}'")
             continue
         literal = {"play_sound": {"file"}, "music_queue_add": {"query"}}.get(str(step_type), set())
@@ -70,7 +72,9 @@ async def run_action(rt: "Runtime", action: Action, ev: Event) -> None:
         try:
             await handler(rt, params, ev)
         except Exception as exc:  # un paso que falla no cancela los siguientes
+            failures += 1
             rt.log(f"[{action.name}] paso {index} ({step_type}) falló: {exc}")
+    return failures
 
 
 # --------------------------------------------------------------------------
@@ -132,5 +136,4 @@ async def _music_queue_add(rt: "Runtime", p: dict[str, Any], ev: Event) -> None:
 
 @subaction("chat_message")
 async def _chat_message(rt: "Runtime", p: dict[str, Any], ev: Event) -> None:
-    # TODO: se enviará a través del conector de la plataforma indicada.
-    rt.log(f"chat_message (pendiente de implementar) -> {p.get('platform', ev.platform)}: {p.get('text', '')}")
+    raise ValueError("El envío a chat no está habilitado en esta beta.")

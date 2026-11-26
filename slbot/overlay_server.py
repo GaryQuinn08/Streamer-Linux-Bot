@@ -147,6 +147,8 @@ class OverlayServer:
         self.clients[ws] = overlay_id
         try:
             await ws.send_str(json.dumps({"channel": "system", "type": "hello"}))
+            if overlay_id == "live-goal":
+                await ws.send_str(json.dumps({"channel": "goal", "counts": self.rt.goal_counts}))
             async for _ in ws:  # los overlays solo escuchan; se ignora lo que envíen
                 pass
         finally:

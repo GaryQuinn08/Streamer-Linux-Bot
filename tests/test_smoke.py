@@ -162,6 +162,9 @@ class TriggerTests(unittest.TestCase):
             def log(self, msg: str) -> None:
                 fired.append(msg)
 
+            async def execute_action(self, action, event, origin):
+                pass
+
             def spawn(self, coro) -> None:
                 coro.close()
 
@@ -243,7 +246,7 @@ class UiTests(RuntimeCase):
 
         app = QApplication.instance() or QApplication([])
         window = MainWindow(self.rt, LogBridge())
-        self.assertEqual(window.pages.count(), 8)
+        self.assertEqual(window.pages.count(), 10)
         self.assertEqual(window.pages.currentWidget(), window.action_page)
         window.close()
         del app

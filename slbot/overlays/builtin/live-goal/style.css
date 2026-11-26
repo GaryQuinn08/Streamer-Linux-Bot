@@ -1,0 +1,8 @@
+:root { --accent: #37dfa8; }
+body { margin: 0; background: transparent; font-family: "Noto Sans", Arial, sans-serif; }
+.goal { margin: 8px; padding: 14px 18px; border-radius: 12px; color: #fff; background: rgba(19, 24, 35, .93); }
+header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; font-size: 21px; margin-bottom: 8px; }
+progress { appearance: none; display: block; width: 100%; height: 16px; border: 0; border-radius: 100px; overflow: hidden; background: #344153; }
+progress::-webkit-progress-bar { background: #344153; }
+progress::-webkit-progress-value { background: var(--accent); transition: width .2s ease; }
+progress::-moz-progress-bar { background: var(--accent); }

@@ -1,10 +1,12 @@
 # Streamer Linux Bot (v2)
 
+Consulta la [comparativa con Streamer.bot y TikFinity y las pruebas de la beta](docs/PARIDAD.md).
+
 Aplicación de escritorio para Linux que automatiza tu stream: recibe eventos
 (chat, seguidores, regalos, donaciones...), los pasa por **triggers** y ejecuta
 **acciones** (alertas en pantalla, cambios de escena en OBS, sonidos, TTS...).
 
-## Beta 4 para Linux
+## Beta 5 para Linux
 
 Instalación desde el repositorio sin ZIP ni dependencias de Qt de APT.
 Conserva el perfil de la beta anterior, incluido el catálogo y las alertas

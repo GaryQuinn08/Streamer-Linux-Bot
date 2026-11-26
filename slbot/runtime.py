@@ -15,6 +15,8 @@ import logging
 import threading
 import time
 from collections import deque
+from dataclasses import dataclass, replace
+from itertools import count
 from typing import Any, Callable, Coroutine
 
 from .audio import MusicQueue
@@ -24,6 +26,7 @@ from .connectors.kick import KickConnector
 from .connectors.platforms import TwitchConnector, YoutubeConnector
 from .connectors.tiktok import TiktokConnector
 from .connectors.spotify import SpotifyConnector
+from .core.actions import run_action
 from .core.config import Config, DEFAULT_ACTIONS, DEFAULT_TRIGGERS, Action, Trigger
 from .core.engine import Engine
 from .core.editing import update_rules
@@ -32,6 +35,28 @@ from .overlay_manager import find_overlay, validate_overlay_values
 from .overlay_server import OverlayServer
 
 log = logging.getLogger("slb.runtime")
+
+
+@dataclass(frozen=True)
+class ActionRun:
+    id: int
+    at: float
+    action: str
+    origin: str
+    platform: str
+    event: str
+    state: str = "En curso"
+    failures: int = 0
+    duration_ms: int | None = None
+
+
+@dataclass(frozen=True)
+class ChatLine:
+    at: float
+    platform: str
+    user: str
+    text: str
+    simulated: bool
 
 
 class Runtime:
@@ -47,6 +72,12 @@ class Runtime:
         self._port_override = port
         self.editor_only = editor_only
         self.log_history: deque[str] = deque(maxlen=500)
+        self._monitor_lock = threading.Lock()
+        self.goal_counts = {"gift": 0, "follow": 0}
+        self._chat: deque[ChatLine] = deque(maxlen=400)
+        self._action_history: deque[ActionRun] = deque(maxlen=300)
+        self._running_actions: deque[ActionRun] = deque(maxlen=300)
+        self._action_ids = count(1)
 
         self.loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
@@ -101,6 +132,43 @@ class Runtime:
     def emit(self, ev: Event) -> None:
         self.submit(self.bus.publish(ev))
 
+    def chat_snapshot(self) -> tuple[ChatLine, ...]:
+        with self._monitor_lock:
+            return tuple(self._chat)
+
+    def action_snapshot(self) -> tuple[ActionRun, ...]:
+        with self._monitor_lock:
+            return tuple(self._running_actions) + tuple(self._action_history)
+
+    async def _track_chat(self, event: Event) -> None:
+        if event.type == "chat" and isinstance(event.data.get("text"), str):
+            line = ChatLine(event.ts, event.platform, event.user, event.data["text"][:500],
+                            event.data.get("simulated") is True)
+            with self._monitor_lock:
+                self._chat.append(line)
+
+    async def execute_action(self, action: Action, event: Event, origin: str) -> None:
+        if self.editor_only:
+            raise ValueError("El editor de perfil no ejecuta acciones.")
+        run = ActionRun(next(self._action_ids), time.time(), action.name, origin, event.platform, event.type)
+        start = time.monotonic()
+        with self._monitor_lock:
+            self._running_actions.append(run)
+        state, failures = "Cancelada", 0
+        try:
+            failures = await run_action(self, action, event)
+            state = "Con errores" if failures else "Completada"
+        except Exception:
+            state, failures = "Con errores", 1
+            raise
+        finally:
+            result = replace(run, state=state, failures=failures,
+                             duration_ms=int((time.monotonic() - start) * 1000))
+            with self._monitor_lock:
+                if run in self._running_actions:
+                    self._running_actions.remove(run)
+                self._action_history.append(result)
+
     async def edit_rule(self, kind: str, data: dict, *, delete: bool = False) -> None:
         update_rules(self.config, kind, data, delete=delete)
 
@@ -142,6 +210,14 @@ class Runtime:
         self.log("Regla de regalos actualizada.")
 
     async def _forward_overlay_event(self, event: Event) -> None:
+        if (event.platform == "tiktok" and event.type in self.goal_counts
+                and event.data.get("simulated") is not True):
+            count = event.data.get("count", 1) if event.type == "gift" else 1
+            if type(count) is int and count > 0:
+                self.goal_counts[event.type] += min(count, 100_000)
+                await self.overlays.broadcast("live-goal", {
+                    "channel": "goal", "counts": self.goal_counts,
+                })
         await self.overlays.forward_event(event)
 
     async def change_overlay_port(self, port: int) -> int:
@@ -192,7 +268,11 @@ class Runtime:
             raise ValueError("Asigna un puerto de overlays primero.")
         if find_overlay(overlay_id) is None:
             raise ValueError("Ese overlay ya no existe.")
-        if overlay_id == "event-feed":
+        if overlay_id == "live-goal":
+            await self.overlays.broadcast(overlay_id, {
+                "channel": "goal-preview", "counts": {"gift": 3, "follow": 1},
+            })
+        elif overlay_id == "event-feed":
             await self.overlays.forward_event(Event("tiktok", "gift", "viewer_demo",
                                                     {"gift_name": "Rose", "count": 3}))
         else:
@@ -236,6 +316,7 @@ class Runtime:
         if self.editor_only:
             self.overlay_port_message = "Editor de perfil: no abre puertos ni transmite."
             return
+        self.bus.subscribe(self._track_chat)
         self.bus.subscribe(self.engine.on_event)
         self.bus.subscribe(self._forward_overlay_event)
         port = self._port_override if self._port_override is not None else self.config.settings.get("overlay_port")

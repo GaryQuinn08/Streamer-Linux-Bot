@@ -891,10 +891,13 @@ class MainWindow(QMainWindow):
             self.connections_page.setAlignment(Qt.AlignmentFlag.AlignTop)
             self.connections_page.setMargin(12)
         else:
+            from .monitor import SessionPanel
             from .music_panel import MusicPanel
 
             self.connections_page = HomeTab(runtime, bridge)
             self.music_page = MusicPanel(runtime)
+            self.chat_page = SessionPanel(runtime, chat=True)
+            self.history_page = SessionPanel(runtime, chat=False)
 
         self.navigation = {}
 
@@ -923,6 +926,9 @@ class MainWindow(QMainWindow):
         if not runtime.editor_only:
             add_page("music", "Música", "Gestiona fuentes de audio y su cola de reproducción.", self.music_page)
         add_group("MONITOR")
+        if not runtime.editor_only:
+            add_page("chat", "Chat", "Lee los mensajes de todas las plataformas en un solo lugar.", self.chat_page)
+            add_page("history", "Historial", "Consulta qué disparó cada acción, su resultado y su duración.", self.history_page)
         add_page("log", "Registro", "Revisa eventos, conexiones y errores de esta sesión.", self.log_view)
         guide = QLabel(
             "<h2>Tu primera alerta</h2>"

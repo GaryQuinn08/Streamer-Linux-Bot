@@ -100,3 +100,32 @@ class WorkspaceTests(unittest.TestCase):
         view.tiktok_mode.setCurrentIndex(1)
         self.assertFalse(view.tiktok_channel.isEnabled())
         self.assertIn("alternativa", view.tiktok_hint.text())
+
+    def test_chat_filter_and_history_navigation(self):
+        from PySide6.QtWidgets import QPushButton
+        from slbot.connectors.simulator import sample_event
+        from slbot.core.events import Event
+        from slbot.ui.main_window import LogBridge, MainWindow
+
+        window = MainWindow(self.rt, LogBridge())
+        self.addCleanup(window.close)
+        window.findChild(QPushButton, "navigate-chat").click()
+        self.assertIs(window.pages.currentWidget(), window.chat_page)
+        async def send_samples():
+            await self.rt.bus.publish(sample_event("chat"))
+            await self.rt.bus.publish(Event("tiktok", "chat", "A", {"text": "<b>hola</b>"}))
+            await self.rt.bus.publish(sample_event("gift"))
+        self.rt.submit(send_samples()).result(timeout=2)
+        chat = window.chat_page
+        chat.refresh()
+        self.assertEqual(chat.table.rowCount(), 2)
+        self.assertIn("prueba", chat.table.item(1, 1).text())
+        chat.platform.setCurrentIndex(chat.platform.findData("tiktok"))
+        self.assertEqual(chat.table.rowCount(), 1)
+        self.assertEqual(chat.table.item(0, 3).text(), "<b>hola</b>")
+        self.assertEqual(chat.table.item(0, 3).toolTip(), "")
+        window.findChild(QPushButton, "navigate-history").click()
+        self.assertIs(window.pages.currentWidget(), window.history_page)
+        window.history_page.refresh()
+        self.assertEqual(window.history_page.table.rowCount(), 1)
+        self.assertIn(window.history_page.table.item(0, 4).text(), ("Completada", "En curso"))

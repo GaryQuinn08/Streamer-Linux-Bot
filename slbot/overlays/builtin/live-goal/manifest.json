@@ -1,0 +1,13 @@
+{
+  "id": "live-goal",
+  "name": "Meta del LIVE",
+  "description": "Objetivo de regalos o seguidores de TikTok. Cuenta eventos reales desde que inicia el bot; recargar la fuente no borra el avance.",
+  "version": "1.0.0",
+  "author": "Streamer Linux Bot",
+  "params": [
+    { "key": "metric", "label": "Contar", "type": "select", "default": "Regalos", "options": ["Regalos", "Seguidores"] },
+    { "key": "target", "label": "Objetivo", "type": "number", "default": 25, "min": 1, "max": 1000000 },
+    { "key": "title", "label": "Título (opcional)", "type": "text", "default": "" },
+    { "key": "color", "label": "Color", "type": "color", "default": "#37dfa8" }
+  ]
+}

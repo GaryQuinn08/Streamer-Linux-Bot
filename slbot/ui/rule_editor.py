@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
 )
 
 from ..connectors.simulator import sample_event
-from ..core.actions import run_action
 from ..core.config import Action
 from ..core.editing import STEP_FIELDS
 from ..overlay_manager import list_overlays
@@ -459,14 +458,15 @@ class ActionWorkspace(QWidget):
         return tools
 
     @staticmethod
-    def _fill(table, rows, selected=-1):
+    def _fill(table, rows, selected=-1, *, tooltips=True):
         table.blockSignals(True)
         table.clearContents()
         table.setRowCount(len(rows))
         for r, values in enumerate(rows):
             for c, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
-                item.setToolTip(str(value))
+                if tooltips:
+                    item.setToolTip(str(value))
                 table.setItem(r, c, item)
         if rows and 0 <= selected < len(rows):
             table.selectRow(selected)
@@ -532,7 +532,7 @@ class ActionWorkspace(QWidget):
 
     def _complete(self, kind, error):
         self.setEnabled(True)
-        self.notice.setText(error or ("Cambios guardados." if kind else "Prueba terminada. Abre Registro para ver el resultado."))
+        self.notice.setText(error or ("Cambios guardados." if kind else "Prueba terminada. Abre Historial para ver el resultado."))
         if not error and kind:
             self.changed.emit(kind)
 
@@ -614,4 +614,4 @@ class ActionWorkspace(QWidget):
     def test_action(self):
         if self.action and self._confirm("Esto ejecutará los pasos reales de la acción con un regalo simulado, "
                                          "incluidos cambios de OBS o audio. ¿Continuar?"):
-            self._send(run_action(self.rt, Action.from_dict(self.action.to_dict()), sample_event("gift")), "")
+            self._send(self.rt.execute_action(Action.from_dict(self.action.to_dict()), sample_event("gift"), "Prueba manual"), "")
