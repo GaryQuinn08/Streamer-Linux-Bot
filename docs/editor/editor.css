@@ -74,6 +74,13 @@ legend { padding: 0; margin-bottom: 7px; }
 input[type="color"] { width: 100%; height: 25px; padding: 2px; border: 1px solid #3b5368; border-radius: 5px; background: var(--panel-deep); cursor: pointer; }
 .numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
 .numbers input { margin-top: 4px; }
+.motion {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  gap: 7px;
+}
+.motion :is(input,select) { margin-top: 4px; }
+.motion input:disabled { opacity: .55; }
 
 .toolbar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 10px 14px; }
 .toolbar label { font-size: 11px; color: var(--muted); }
@@ -125,6 +132,8 @@ code { font-family: "Noto Sans Mono", "DejaVu Sans Mono", ui-monospace, monospac
 }
 @media (max-width: 630px) {
   .wrap { width: calc(100% - 22px); }
+  .mast-inner { flex-wrap: wrap; gap: 4px 10px; padding-block: 6px; }
+  .masthead nav { flex-wrap: wrap; gap: 7px; }
   .hero { flex-direction: column; align-items: start; gap: 12px; min-height: auto; padding-block: 19px; }
   .hero-actions { justify-items: start; }
   .workspace { grid-template-columns: 1fr; }

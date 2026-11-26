@@ -9,8 +9,8 @@
     chat: "Una lista de mensajes nuevos de las plataformas conectadas al bot.",
     events: "Una lista de eventos nuevos del directo, como regalos, seguidores o donaciones."
   };
-  const inputKeys = ["name", "title", "body", "accent", "textColor", "background", "size", "duration", "opacity", "max", "markup", "css"];
-  const numberKeys = new Set(["size", "duration", "opacity", "max"]);
+  const inputKeys = ["name", "title", "body", "accent", "textColor", "background", "size", "duration", "opacity", "max", "enter", "exit", "enterMs", "exitMs", "markup", "css"];
+  const numberKeys = new Set(["size", "duration", "opacity", "max", "enterMs", "exitMs"]);
   const fieldFor = (key) => get(key === "css" ? "custom-css" : key);
   const titles = {
     gift: "Regalo de TikTok", follow: "Nuevo seguidor", donation: "Donación", bits: "Bits de Twitch", sub: "Suscripción",
@@ -49,6 +49,19 @@
   let mode = "alert";
   let lastTagTarget = "body";
   let raf = 0;
+  let previewRestore = null;
+  const motionLabels = {
+    none: "Ninguna", fade: "Fundido", "slide-up": "Deslizar arriba",
+    "slide-left": "Deslizar a la izquierda", zoom: "Zoom", pop: "Rebote"
+  };
+  for (const id of ["enter", "exit"]) {
+    for (const key of api.EFFECTS) {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = motionLabels[key];
+      get(id).append(option);
+    }
+  }
 
   function status(message, error = false) {
     get("status").textContent = message;
@@ -78,18 +91,36 @@
     return api.normalize(values);
   }
 
-  function showPreview() {
+  function showPreview(replay = false) {
+    if (previewRestore !== null) {
+      clearTimeout(previewRestore);
+      previewRestore = null;
+    }
+    const config = state();
+    get("enterMs").disabled = config.enter === "none";
+    get("exitMs").disabled = config.exit === "none";
+    const enter = config.enter !== "none" && config.enterMs > 0;
+    const exit = config.exit !== "none" && config.exitMs > 0;
+    get("replay").disabled = !enter && !exit;
     try {
-      get("preview").srcdoc = api.build(state(), placeholders, false);
+      get("preview").srcdoc = api.build(config, placeholders, false, { replay });
       get("preview-help").textContent = placeholders.length
         ? "La muestra es local y no se conecta a chats. Pulsa Limpiar para quitarla."
         : "Sin muestras visibles. Elige un ejemplo y pulsa Simular evento.";
+      if (replay && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        get("preview-help").textContent = "El navegador tiene activada la preferencia de movimiento reducido.";
+      } else if (replay && exit) {
+        const wait = Math.max(950, (enter ? config.enterMs : 0) + 160);
+        previewRestore = setTimeout(() => showPreview(), wait + config.exitMs + 280);
+        get("preview-help").textContent = "Reproduciendo una muestra. El tiempo de espera se acorta solo en la vista previa.";
+      }
       get("preview-help").dataset.error = "false";
       get("export").disabled = false;
     } catch (error) {
       get("preview-help").textContent = error instanceof Error ? error.message : "Revisa el HTML o CSS.";
       get("preview-help").dataset.error = "true";
       get("export").disabled = true;
+      get("replay").disabled = true;
     }
   }
 
@@ -279,6 +310,10 @@
     placeholders = placeholders.slice(-24);
     showPreview();
   });
+  get("replay").addEventListener("click", () => {
+    if (!placeholders.length) placeholders = [sample(get("fixture").value)];
+    showPreview(true);
+  });
   get("clear").addEventListener("click", () => { placeholders = []; showPreview(); });
   for (const tab of ["html", "css"]) {
     const button = get("tab-" + tab);
@@ -298,15 +333,17 @@
     event.target.value = "";
   });
   function shareableSettings() {
-    const { mode: source, name, title, body, accent, textColor, background, duration, size, max, opacity } = state();
-    return { mode: source, name, title, body, accent, textColor, background, duration, size, max, opacity };
+    const { mode: source, name, title, body, accent, textColor, background, duration, size, max, opacity,
+      enter, exit, enterMs, exitMs } = state();
+    return { mode: source, name, title, body, accent, textColor, background, duration, size, max, opacity,
+      enter, exit, enterMs, exitMs };
   }
 
   get("share").addEventListener("click", async () => {
     const uri = new URL(location.href);
     uri.search = "";
     uri.hash = "preset=" + encodeURIComponent(JSON.stringify(shareableSettings()));
-    if (await copy(uri.toString())) status("Enlace copiado. Incluye textos y aspecto, no cambios de HTML o CSS.");
+    if (await copy(uri.toString())) status("Enlace copiado. Incluye textos, aspecto y animación, no cambios de HTML o CSS.");
     else status("No se pudo copiar el enlace de ajustes.", true);
   });
 

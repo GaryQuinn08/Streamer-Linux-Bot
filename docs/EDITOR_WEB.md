@@ -21,6 +21,9 @@ servidor de prueba a Internet.
 1. Elige **Alerta**, **Multichat** o **Actividad**, ajusta controles o
    edita el HTML y CSS del diseño y usa la muestra para comprobarlo.
 2. Descarga el HTML. Conserva el archivo si quieres una copia local.
+   Elige la entrada, la salida y su duración en **Movimiento**; usa la
+   vista previa para ensayar ambos efectos. Las animaciones se incluyen
+   en el HTML y respetan la preferencia de movimiento reducido.
 3. Abre **Overlays → Importar HTML…** en Streamer Linux Bot y selecciona
    lo que descargaste. Importa solo archivos de confianza.
 4. En el catálogo del bot, copia su URL local a una fuente **Navegador**

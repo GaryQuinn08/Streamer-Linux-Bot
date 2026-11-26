@@ -7,7 +7,9 @@
   const artKeys = new Set(["orbit", "wave", "grid", "ribbon", "spark", "scan"]);
   const shapeKeys = new Set(["wide", "square", "tall"]);
   const hex = /^#[0-9a-f]{6}$/i;
-  const ranges = { duration: [0, 300], size: [12, 72], max: [1, 24], opacity: [0, 100] };
+  const ranges = { duration: [0, 300], size: [12, 72], max: [1, 24], opacity: [0, 100],
+    enterMs: [0, 3000], exitMs: [0, 3000] };
+  const effects = new Set(window.SLB_EDITOR?.EFFECTS || ["none"]);
   const labelLimits = { name: 60, title: 220, body: 380 };
   const validId = /^[a-z0-9][a-z0-9-]{0,63}$/;
   const githubLogin = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
@@ -60,6 +62,9 @@
       if (typeof raw[key] === "number" && Number.isFinite(raw[key])) {
         preset[key] = Math.min(max, Math.max(min, Math.round(raw[key])));
       }
+    }
+    for (const key of ["enter", "exit"]) {
+      if (effects.has(raw[key])) preset[key] = raw[key];
     }
     const description = safeText(entry.description, 240);
     const author = safeText(entry.author, 80) || "Comunidad";
@@ -159,6 +164,7 @@
       add(peek, "strong", sampleTpl(title, fields));
       add(peek, "p", sampleTpl(body, fields));
     }
+    return stage;
   }
 
   function download(model) {
@@ -210,7 +216,21 @@
     card.className = "pin";
     card.dataset.id = model.id;
     const target = "../editor/#preset=" + encodeURIComponent(JSON.stringify(model.preset));
-    pinPreview(card, model, target);
+    const stage = pinPreview(card, model, target);
+    const motion = (model.preset.enter && model.preset.enter !== "none" && model.preset.enterMs !== 0)
+      || (model.preset.exit && model.preset.exit !== "none" && model.preset.exitMs !== 0);
+    if (motion) {
+      const play = add(card, "button", "", "play-motion");
+      play.type = "button";
+      play.setAttribute("aria-label", "Reproducir animación de " + model.preset.name);
+      play.title = "Reproducir animación";
+      play.addEventListener("click", () => {
+        const played = window.SLB_EDITOR?.animateSample(stage, model.preset);
+        get("notice").textContent = played
+          ? "Reproduciendo la animación de " + model.preset.name + "."
+          : "La animación está desactivada o el navegador prefiere movimiento reducido.";
+      });
+    }
     model.favorite = add(card, "button", "", "favorite");
     model.favorite.type = "button";
     model.favorite.addEventListener("click", () => toggleFavorite(model));

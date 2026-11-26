@@ -104,6 +104,16 @@ h2 { margin: 0 0 5px; line-height: 1.18; }
 .favorite { position: absolute; top: 8px; right: 8px; z-index: 2; display: grid; place-items: center; padding: 0; inline-size: 34px; block-size: 34px; border: 1px solid #ffffff4d; border-radius: 50%; background: #111923ed; color: #f3f4f9; font-size: 22px; line-height: 1; }
 .favorite:hover { color: #ffadb6; background: #252d39; }
 .favorite[aria-pressed="true"] { background: #3d2938; color: #ffa4b6; }
+.play-motion {
+  position: absolute; top: 8px; right: 47px; z-index: 2; display: grid; place-items: center; padding: 0;
+  inline-size: 34px; block-size: 34px; border: 1px solid #ffffff4d; border-radius: 50%;
+  background: #111923ed; color: #f3f4f9;
+}
+.play-motion::before {
+  content: ""; width: 0; height: 0; margin-inline-start: 2px;
+  border-block: 5px solid transparent; border-inline-start: 8px solid currentColor;
+}
+.play-motion:hover { color: var(--mint); background: #252d39; }
 
 .pin-body { padding: 9px 10px 10px; }
 .pin-name { font-size: 16px; letter-spacing: -.013em; }
@@ -128,6 +138,8 @@ h2 { margin: 0 0 5px; line-height: 1.18; }
   .masonry { columns: 3 185px; column-gap: 10px; }
 }
 @media (max-width: 640px) {
+  .header-inner { flex-wrap: wrap; gap: 4px 7px; padding-block: 5px; }
+  .site-nav nav { flex-wrap: wrap; gap: 3px; }
   .hero { align-items: start; flex-direction: column; gap: 7px; padding: 15px 0 12px; }
   .hero p { font-size: 13px; }
   .search { max-width: none; flex-basis: 100%; }
@@ -143,4 +155,5 @@ h2 { margin: 0 0 5px; line-height: 1.18; }
 }
 @media (prefers-reduced-motion: reduce) {
   .peek-stage { transition: none; }
+  .pin-preview:hover .peek-stage { transform: none; }
 }

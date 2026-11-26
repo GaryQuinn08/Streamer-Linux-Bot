@@ -1,0 +1,45 @@
+const fs=require('node:fs'), assert=require('node:assert/strict');
+// Ejecutar desde la raíz con @electric-sql/pglite disponible en NODE_PATH.
+const {PGlite}=require('@electric-sql/pglite');
+(async()=>{
+ const db=new PGlite();
+ await db.exec(`
+ create role anon; create role authenticated; create role service_role;
+ create schema auth;
+ create table auth.users(id uuid primary key);
+ grant usage on schema auth to anon, authenticated, service_role;
+ create function auth.jwt() returns jsonb language sql stable as $$ select current_setting('request.jwt.claims',true)::jsonb $$;
+ create function auth.uid() returns uuid language sql stable as $$ select (auth.jwt()->>'sub')::uuid $$;
+ insert into auth.users values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+ `);
+ await db.exec(fs.readFileSync('supabase/migrations/202611260501_overlay_community.sql','utf8'));
+ const session=async(name,id,provider='google')=>db.exec(`reset role; set role ${name}; set request.jwt.claims to '${JSON.stringify({sub:id,app_metadata:{provider}})}';`);
+ const insert=()=>db.query(`insert into public.overlay_submissions(creator_name,description,license,design) values ('Demo', 'Descripción de prueba', 'CC0-1.0', '{"mode":"alert","name":"Animación","enter":"zoom","enterMs":300}') returning id`);
+ await session('anon',null);
+ assert.equal((await db.query('select id from public.overlay_publications')).rows.length,0);
+ await assert.rejects(()=>db.query('select id from public.overlay_submissions'));
+ await assert.rejects(()=>db.query('select creator_user from public.overlay_publications'));
+ await assert.rejects(insert);
+ await session('authenticated','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','github');
+ await assert.rejects(insert);
+ await session('authenticated','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+ const [{id}]=(await insert()).rows;
+ await assert.rejects(()=>db.query('update public.overlay_submissions set status=\'approved\''));
+ await assert.rejects(()=>db.query('select public.review_overlay_submission($1,true)',[id]));
+ assert.equal((await db.query('select status from public.overlay_submissions')).rows[0].status,'pending');
+ await session('authenticated','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+ assert.equal((await db.query('select id from public.overlay_submissions')).rows.length,0);
+ await db.exec('reset role');
+ await db.query('select public.review_overlay_submission($1,true)',[id]);
+ await session('anon',null);
+ assert.equal((await db.query('select design from public.overlay_publications')).rows[0].design.enter,'zoom');
+ await db.exec('reset role');
+ await db.query('select public.review_overlay_submission($1,false)',[id]);
+ await session('anon',null);
+ assert.equal((await db.query('select id from public.overlay_publications')).rows.length,0);
+ await session('authenticated','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+ for (let i=0;i<10;i++) await insert();
+ await assert.rejects(insert,/Daily submission limit reached/);
+ await db.close();
+ console.log('PASS PostgreSQL: Google identity binding, pending privacy, anonymous browse only, no self-approval, moderator publish and retract with motion intact.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

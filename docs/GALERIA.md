@@ -37,7 +37,9 @@ El objeto `preset` acepta solo `mode` (`alert`, `chat`, `events`), nombre,
 plantillas de texto (`title`, `body`), colores hexadecimales de seis
 dígitos (`accent`, `textColor`, `background`), número de mensajes
 (`max`), tamaño (`size`), duración en segundos (`duration`) y opacidad
-(`opacity`, porcentaje). Los campos que omitas toman los valores de la
+(`opacity`, porcentaje), efectos de animación de entrada y salida
+(`enter` / `exit`) y sus duraciones (`enterMs` / `exitMs`). Los campos
+que omitas toman los valores de la
 plantilla. No agregues HTML, JavaScript, hojas de estilos ni URL a la
 entrada: el editor ya permite personalizar una copia local.
 
@@ -56,3 +58,5 @@ entrada: el editor ya permite personalizar una copia local.
 - **Servidor propio con Docker** si prefieres guardar y moderar todo en
   tu infraestructura. El código del editor y del servicio seguiría en
   este mismo repositorio.
+
+Para habilitar inicio de sesión y envío directo de diseños animados, lee [Comunidad](COMUNIDAD.md).

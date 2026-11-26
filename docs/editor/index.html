@@ -18,7 +18,8 @@
     <div class="wrap mast-inner">
       <a class="brand" href="../galeria/" aria-label="Abrir galería de Streamer Linux Bot"><span class="brand-mark">SL</span> Streamer Linux Bot</a>
       <nav aria-label="Navegación del estudio">
-        <a href="../galeria/">Explorar diseños</a>
+        <a href="../galeria/">Galería</a>
+        <a href="../comunidad/">Comunidad</a>
         <span aria-current="page">Editor</span>
       </nav>
     </div>
@@ -98,6 +99,15 @@
             <label id="max-field" for="max">Filas<input id="max" type="number" min="1" max="24"></label>
           </fieldset>
           <p class="help">0 segundos mantiene las tarjetas visibles. Para el chat, las filas nuevas desplazan a las antiguas.</p>
+
+          <fieldset class="motion">
+            <legend>Animación</legend>
+            <label for="enter">Entrada <select id="enter"></select></label>
+            <label for="enterMs">Duración (ms)<input id="enterMs" type="number" min="0" max="3000" step="1"></label>
+            <label for="exit">Salida <select id="exit"></select></label>
+            <label for="exitMs">Duración (ms)<input id="exitMs" type="number" min="0" max="3000" step="1"></label>
+          </fieldset>
+          <p class="help">La salida se aplica al terminar el tiempo de la tarjeta. Con 0 segundos no sale automáticamente.</p>
         </div>
       </section>
 
@@ -110,6 +120,7 @@
           <label for="fixture">Evento de ejemplo</label>
           <select id="fixture"></select>
           <button id="play" type="button" class="secondary">Simular evento</button>
+          <button id="replay" type="button" class="quiet">Repetir animación</button>
           <button id="clear" type="button" class="quiet">Limpiar</button>
         </div>
         <div class="screen">

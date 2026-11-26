@@ -23,7 +23,20 @@
     events: Object.freeze({ name: "Mis últimos eventos", title: "{user}", body: "{event_label}", accent: "#e8b6ff",
       textColor: "#fff7ff", background: "#261a34", duration: 0, size: 22, max: 5, opacity: 90, markup: MARKUP, css: CSS })
   });
-  const RANGES = Object.freeze({ duration: [0, 300], size: [12, 72], max: [1, 24], opacity: [0, 100] });
+  const RANGES = Object.freeze({ duration: [0, 300], size: [12, 72], max: [1, 24], opacity: [0, 100],
+    enterMs: [0, 3000], exitMs: [0, 3000] });
+  const MOTION_DEFAULTS = Object.freeze({ enter: "none", exit: "none", enterMs: 320, exitMs: 240 });
+  const MOTIONS = Object.freeze({
+    fade: [["none", "none"], ["none", "none"]],
+    "slide-up": [["translateY(24px)", "none"], ["none", "translateY(-24px)"]],
+    "slide-left": [["translateX(24px)", "none"], ["none", "translateX(-24px)"]],
+    zoom: [["scale(.88)", "none"], ["none", "scale(.88)"]],
+    pop: [["scale(.84)", "scale(1.06)", "none"], ["none", "scale(1.05)", "scale(.88)"]]
+  });
+  const EFFECTS = Object.freeze(["none", ...Object.keys(MOTIONS)]);
+  const TIMING_IN = "cubic-bezier(.2,.75,.35,1)";
+  const TIMING_OUT = "ease-in";
+  const localAnimations = new WeakMap();
   const LIMITS = Object.freeze({ name: 60, title: 220, body: 380, markup: 12000, css: 12000 });
   const SAFE_TAGS = new Set(("article aside b blockquote br code dd div dl dt em footer h1 h2 h3 h4 header hr i li mark ol p pre section small span strong time u ul").split(" "));
   const VOID_TAGS = new Set(["br", "hr"]);
@@ -53,13 +66,16 @@
 
   function normalize(values = {}, presetOnly = false) {
     const mode = typeof values.mode === "string" && own(DEFAULTS, values.mode) ? values.mode : "alert";
-    const clean = { ...DEFAULTS[mode], mode };
+    const clean = { ...MOTION_DEFAULTS, ...DEFAULTS[mode], mode };
     for (const [name, max] of Object.entries(LIMITS)) {
       if (presetOnly && (name === "css" || name === "markup")) continue;
       if (typeof values[name] === "string") clean[name] = values[name].slice(0, max);
     }
     for (const key of ["accent", "textColor", "background"]) {
       if (typeof values[key] === "string" && /^#[0-9a-f]{6}$/i.test(values[key])) clean[key] = values[key];
+    }
+    for (const stage of ["enter", "exit"]) {
+      if (EFFECTS.includes(values[stage])) clean[stage] = values[stage];
     }
     for (const [key, [low, high]] of Object.entries(RANGES)) {
       const n = values[key];
@@ -155,10 +171,69 @@
     return raw;
   }
 
-  function properties(config, style) {
+  function frames(effect, exit = false) {
+    const transforms = MOTIONS[effect][exit ? 1 : 0];
+    return transforms.map((transform, at) => ({
+      transform, opacity: (exit ? at === transforms.length - 1 : at === 0) ? 0 : 1,
+      offset: at === 0 ? 0 : at === transforms.length - 1 ? 1 : .68
+    }));
+  }
+
+  function animationCss(config, replay) {
+    const enter = config.enter !== "none" && config.enterMs > 0;
+    const exit = config.exit !== "none" && config.exitMs > 0;
+    if (!enter && !exit) return "";
+    const css = [];
+    const rule = (name, keyframes) => "@keyframes " + name + "{"
+      + keyframes.map((frame) => (frame.offset * 100) + "%{opacity:" + frame.opacity + ";transform:" + frame.transform + "}").join("")
+      + "}";
+    const entry = enter ? "slb-entry " + config.enterMs + "ms " + TIMING_IN + " both" : "";
+    const leave = exit ? "slb-leave " + config.exitMs + "ms " + TIMING_OUT + " forwards" : "";
+    if (enter) {
+      css.push(rule("slb-entry", frames(config.enter)));
+      css.push(".slb-row.slb-enter{animation:" + entry + "}");
+    }
+    if (exit) {
+      css.push(rule("slb-leave", frames(config.exit, true)));
+      css.push(".slb-row.slb-exit{animation:" + leave + "}");
+    }
+    if (replay) {
+      // En la vista de prueba se resume el tiempo de espera, no el efecto.
+      const delay = Math.max(950, (enter ? config.enterMs : 0) + 160);
+      css.push(".slb-motion-preview .slb-row{animation:"
+        + [entry, leave ? leave + " " + delay + "ms" : ""].filter(Boolean).join(",") + "}");
+    }
+    css.push("@media(prefers-reduced-motion:reduce){.slb-row.slb-enter,.slb-row.slb-exit,.slb-motion-preview .slb-row{animation:none!important}}");
+    return css.join("\n");
+  }
+
+  // Reproducción local, solo por petición explícita en un pin de la galería.
+  function animateSample(element, input) {
+    if (typeof element?.animate !== "function") return false;
+    localAnimations.get(element)?.();
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+    const config = normalize(input, true);
+    const enter = config.enter !== "none" && config.enterMs > 0;
+    const exit = config.exit !== "none" && config.exitMs > 0;
+    if (!enter && !exit) return false;
+    let active = enter ? element.animate(frames(config.enter), {
+      duration: config.enterMs, easing: TIMING_IN, fill: "backwards"
+    }) : null;
+    const timer = exit ? setTimeout(() => {
+      active?.cancel();
+      active = element.animate(frames(config.exit, true), { duration: config.exitMs, easing: TIMING_OUT });
+    }, Math.max(950, (enter ? config.enterMs : 0) + 160)) : null;
+    localAnimations.set(element, () => {
+      if (timer !== null) clearTimeout(timer);
+      active?.cancel();
+    });
+    return true;
+  }
+
+  function properties(config, style, replay) {
     const digits = config.background.slice(1).match(/.{2}/g);
     const rgb = digits.map((part) => parseInt(part, 16)).join(", ");
-    return `:root{--accent:${config.accent};--ink:${config.textColor};--card:rgba(${rgb},${config.opacity / 100});font-size:${config.size}px}\n${ONSCREEN_CSS}\n${style}`;
+    return `:root{--accent:${config.accent};--ink:${config.textColor};--card:rgba(${rgb},${config.opacity / 100});font-size:${config.size}px}\n${ONSCREEN_CSS}\n${style}\n${animationCss(config, replay)}`;
   }
 
   // Se evalúa aquí para la previsualización y se copia al HTML descargado.
@@ -220,7 +295,15 @@
       timers.delete(row);
       row.remove();
     }
-    function draw(msg, timed = false, labelSample = false) {
+    function dismiss(row) {
+      if (config.exit !== "none" && config.exitMs > 0
+          && !doc.defaultView?.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        row.classList.remove("slb-enter");
+        row.classList.add("slb-exit");
+        timers.set(row, setTimeout(() => remove(row), config.exitMs));
+      } else remove(row);
+    }
+    function draw(msg, timed = false, labelSample = false, animate = false) {
       if (!msg || typeof msg !== "object") return;
       const fields = adapt(msg);
       const slots = Object.create(null);
@@ -229,6 +312,7 @@
       slots.body = expand(config.body, fields);
       const row = doc.createElement("div");
       row.className = "slb-row";
+      if (animate && config.enter !== "none" && config.enterMs > 0) row.classList.add("slb-enter");
       if (labelSample && (msg.simulated === true || msg.variables?.simulated === true)) {
         const badge = doc.createElement("span");
         badge.className = "slb-simulation";
@@ -246,7 +330,7 @@
       while (stage.children.length > config.max) remove(stage.firstElementChild);
       const sampled = msg.simulated === true || msg.variables?.simulated === true;
       const duration = sampled && labelSample ? Math.min(config.duration || 8, 8) : config.duration;
-      if (timed && duration > 0) timers.set(row, setTimeout(() => remove(row), duration * 1000));
+      if (timed && duration > 0) timers.set(row, setTimeout(() => dismiss(row), duration * 1000));
     }
     return { draw };
   }
@@ -260,7 +344,7 @@
     const local = /^https?:$/.test(location.protocol) && ["127.0.0.1", "localhost"].includes(location.hostname);
     const overlay = /^\/overlay\/([a-z0-9][a-z0-9_-]{0,63})(?:\/(?:index\.html)?)?$/.exec(location.pathname);
     if (!local || !overlay) {
-      if (config.example) draw(config.example, false, true);
+      if (config.example) draw(config.example, false, true, true);
       return;
     }
     const target = config.mode === "alert" ? overlay[1] : config.mode === "chat" ? "multi-chat" : "event-feed";
@@ -275,7 +359,7 @@
         if (config.mode === "alert" && (msg.channel !== "alert" || msg.overlay !== target)) return;
         if (config.mode === "chat" && msg.channel !== "chat") return;
         if (config.mode === "events" && msg.channel !== "event") return;
-        draw(msg, true, true);
+        draw(msg, true, true, true);
       });
       socket.addEventListener("close", () => setTimeout(connect, 2000));
     }
@@ -291,9 +375,11 @@
     return text.replace(/[<>&"]/g, (character) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[character]));
   }
 
-  function build(config, samples, exported) {
+  function build(input, samples, exported, { replay = false } = {}) {
+    const config = normalize(input);
+    const previewMotion = replay && !exported;
     const template = parseMarkup(config.markup);
-    const css = properties(config, checkCss(config.css));
+    const css = properties(config, checkCss(config.css), previewMotion);
     const policy = exported
       ? "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src ws://127.0.0.1:* ws://localhost:* wss://127.0.0.1:* wss://localhost:*; base-uri 'none'; form-action 'none'"
       : "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'";
@@ -304,12 +390,14 @@
       + '<body data-mode="' + config.mode + '">';
     const stage = document.createElement("main");
     stage.id = "slb-stage";
+    if (previewMotion) stage.className = "slb-motion-preview";
     if (exported) {
       const templateEl = document.createElement("template");
       templateEl.id = "slb-template";
       templateEl.content.append(template);
       const runtime = { mode: config.mode, title: config.title, body: config.body,
-        max: config.max, duration: config.duration, example: samples.at(-1) };
+        max: config.max, duration: config.duration, enter: config.enter, exit: config.exit,
+        enterMs: config.enterMs, exitMs: config.exitMs, example: samples.at(-1) };
       const metadata = '<script id="slb-design-v1" type="application/json">' + safeScript(config) + '</script>';
       return header + stage.outerHTML + templateEl.outerHTML + metadata + "<script>"
         + renderEngine.toString() + "\n(" + startRuntime.toString() + ")(" + safeScript(runtime) + ");"
@@ -346,5 +434,5 @@
     return config;
   }
 
-  window.SLB_EDITOR = { DEFAULTS, normalize, build, fromUrl, reopen };
+  window.SLB_EDITOR = { DEFAULTS, EFFECTS, normalize, build, fromUrl, reopen, animateSample };
 })();
