@@ -31,6 +31,7 @@ from .core.config import Config, DEFAULT_ACTIONS, DEFAULT_TRIGGERS, Action, Trig
 from .core.engine import Engine
 from .core.editing import update_rules
 from .core.events import Event, EventBus
+from .core.timers import Timer, TimerService, read_timers
 from .overlay_manager import find_overlay, validate_overlay_values
 from .overlay_server import CHAT_PLATFORMS, OverlayServer
 
@@ -87,6 +88,8 @@ class Runtime:
 
         self.bus = EventBus()
         self.engine = Engine(self)
+        self.timers = TimerService(self)
+        self._timer_task: asyncio.Task | None = None
         self.music = MusicQueue(self)
         self.overlays = OverlayServer(self)
         self.overlay_port_message = ""
@@ -171,6 +174,22 @@ class Runtime:
 
     async def edit_rule(self, kind: str, data: dict, *, delete: bool = False) -> None:
         update_rules(self.config, kind, data, delete=delete)
+
+    async def edit_timer(self, data: dict, *, delete: bool = False) -> None:
+        existing = {item.id: item for item in read_timers(self.config.settings)}
+        if delete:
+            existing.pop(data.get("id"), None)
+        else:
+            timer = Timer.parse(data)
+            if self.config.action_by_id(timer.action_id) is None:
+                raise ValueError("Elige una acción existente.")
+            if timer.id not in existing and len(existing) >= 100:
+                raise ValueError("El perfil admite hasta 100 temporizadores.")
+            existing[timer.id] = timer
+        settings = {**self.config.settings, "timers": [item.to_dict() for item in existing.values()]}
+        Config(settings=settings, triggers=self.config.triggers, actions=self.config.actions,
+               path=self.config.path).save()
+        self.config.settings = settings
 
     async def save_gift_rule(self, enabled: bool, gift_name: str, cooldown: int,
                              title: str, sound: str = "", overlay_id: str = "gift-alert") -> None:
@@ -340,10 +359,15 @@ class Runtime:
             self.overlay_port_message = "Asigna un puerto para activar los overlays."
         if self.overlay_port_message:
             self.log(self.overlay_port_message)
+        self._timer_task = asyncio.create_task(self.timers.run())
         if self.config.settings["obs"].get("autoconnect"):
             self.spawn(self.obs.start())
 
     async def _shutdown(self) -> None:
+        if self._timer_task is not None:
+            self._timer_task.cancel()
+            await asyncio.gather(self._timer_task, return_exceptions=True)
+            self._timer_task = None
         tasks = list(self._background)
         for task in tasks:
             task.cancel()

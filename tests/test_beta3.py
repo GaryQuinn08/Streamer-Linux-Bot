@@ -87,6 +87,8 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                 await asyncio.wait_for(proc.stdout.readline(), 10)
                 config = Config.load(Path(root) / "config.json")
                 config.settings["overlay_presets"] = {"gift-alert": {"color": "#c0ffee"}}
+                config.settings["timers"] = [{"id": "test", "name": "Prueba SIGHUP",
+                    "action_id": "alert-gift", "seconds": 1, "enabled": True}]
                 config.save()
                 proc.send_signal(signal.SIGHUP)
                 async with aiohttp.ClientSession() as session:
@@ -97,6 +99,9 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                         await asyncio.sleep(.02)
                     else:
                         self.fail("no se recargó el preset")
+                    async with session.ws_connect(f"http://127.0.0.1:{port}/ws/gift-alert") as ws:
+                        self.assertEqual((await ws.receive_json(timeout=3))["type"], "hello")
+                        self.assertEqual((await ws.receive_json(timeout=4))["channel"], "alert")
             finally:
                 if proc.returncode is None:
                     proc.terminate()

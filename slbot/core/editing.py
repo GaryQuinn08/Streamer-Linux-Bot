@@ -5,6 +5,7 @@ import copy
 from uuid import uuid4
 
 from .config import Action, Config, Trigger
+from .timers import read_timers
 
 # key, label, type, default. Requests use only the action types listed here.
 STEP_FIELDS = {
@@ -34,6 +35,7 @@ def update_rules(config: Config, kind: str, data: dict, *, delete: bool = False)
     if kind == "action":
         if delete:
             refs = [t.name for t in triggers if t.action_id == ident]
+            refs += [t.name for t in read_timers(config.settings) if t.action_id == ident]
             if refs:
                 raise ValueError("La acción todavía se utiliza en: " + ", ".join(refs))
             actions = [a for a in actions if a.id != ident]

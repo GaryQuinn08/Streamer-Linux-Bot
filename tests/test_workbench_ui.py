@@ -176,3 +176,37 @@ class WorkspaceTests(unittest.TestCase):
         self.assertIn("/overlay/multi-chat/", view.url.text())
         view.refresh(select_id="gift-alert")
         self.assertNotIn(label, view.overlay_hint.text())
+
+    def test_timer_editor_uses_profile_and_exposes_pause(self):
+        from PySide6.QtCore import QCoreApplication, QEvent
+        from slbot.core.timers import read_timers
+        from slbot.ui.main_window import LogBridge, MainWindow
+
+        window = MainWindow(self.rt, LogBridge())
+        def dispose():
+            window.close()
+            window.deleteLater()
+            QCoreApplication.sendPostedEvents(window, QEvent.Type.DeferredDelete)
+        self.addCleanup(dispose)
+        window.select_page("timers")
+        panel = window.timer_page
+        self.assertIs(window.pages.currentWidget(), panel)
+
+        class FixtureForm:
+            def __init__(self, _parent, actions, existing):
+                self.result_data = {"id": "demo", "name": "Aviso", "seconds": 30,
+                                    "action_id": actions[0].id, "enabled": False}
+                if existing is not None:
+                    raise AssertionError("Nuevo temporizador con perfil existente")
+
+            def exec(self):
+                return True
+
+        with patch("slbot.ui.timer_panel.TimerForm", FixtureForm):
+            panel.add.click()
+        self._wait_for(lambda: panel.table.rowCount() == 1)
+        self.assertEqual(panel.table.item(0, 3).text(), "Inactivo")
+        panel.toggle.click()
+        self._wait_for(lambda: panel.table.item(0, 3).text() == "Activo")
+        self.assertTrue(read_timers(Config.load(self.path).settings)[0].enabled)
+        self.assertEqual(panel.toggle.text(), "Desactivar")

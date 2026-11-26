@@ -895,6 +895,8 @@ class MainWindow(QMainWindow):
         bridge.message.connect(self.log_view.appendPlainText)
         self.action_page = ActionWorkspace(runtime, bridge.rules_changed)
         self.trigger_page = RulesPanel(runtime, "trigger", bridge.rules_changed)
+        from .timer_panel import TimerPanel
+        self.timer_page = TimerPanel(runtime, bridge.rules_changed)
         self.quick_page = TriggersTab(runtime, bridge)
         self.overlays_page = OverlaysTab(runtime, bridge)
         bridge.gift_save_done.connect(lambda error: bridge.rules_changed.emit("quick") if not error else None)
@@ -934,6 +936,7 @@ class MainWindow(QMainWindow):
         add_group("AUTOMATIZACIÓN")
         add_page("actions", "Acciones", "Edita los disparadores y los pasos de una acción desde un solo lugar.", self.action_page)
         add_page("triggers", "Disparadores", "Consulta todos los eventos que activan tus acciones.", self.trigger_page)
+        add_page("timers", "Temporizadores", "Ejecuta acciones a intervalos sin depender del chat.", self.timer_page)
         add_page("gifts", "Regla de regalos", "Configura rápidamente la alerta predeterminada de TikTok.", self.quick_page)
         add_group("TRANSMISIÓN")
         add_page("connections", "Conexiones", "Conecta tus cuentas, prepara OBS o prueba un evento simulado.", self.connections_page)

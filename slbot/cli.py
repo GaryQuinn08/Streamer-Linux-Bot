@@ -44,7 +44,8 @@ async def serve(args: argparse.Namespace) -> int:
             return
         config.triggers, config.actions = data.triggers, data.actions
         config.settings["overlay_presets"] = data.settings.get("overlay_presets", {})
-        rt.log("Triggers, acciones y alertas recargados. Refresca las fuentes si cambiaste su apariencia.")
+        config.settings["timers"] = data.settings.get("timers", [])
+        rt.log("Triggers, acciones, alertas y temporizadores recargados. Refresca las fuentes si cambiaste su apariencia.")
 
     if hasattr(signal, "SIGHUP") and os.name != "nt":
         loop.add_signal_handler(signal.SIGHUP, reload_editor_profile)
