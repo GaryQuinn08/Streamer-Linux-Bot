@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable
 from ..audio import play_sound, say
 from .config import Action
 from .events import Event
+from .flow import MAX_DEPTH, MAX_STEPS, VALUE_LIMIT, evaluate, validate_steps
 
 if TYPE_CHECKING:  # evita importaciones circulares
     from ..runtime import Runtime
@@ -42,7 +43,7 @@ def subaction(name: str) -> Callable[[Handler], Handler]:
 
 
 def available_subactions() -> list[str]:
-    return sorted(_HANDLERS)
+    return sorted(set(_HANDLERS) | {"set_variable", "run_action", "condition"})
 
 
 def build_context(ev: Event) -> dict[str, str]:
@@ -74,33 +75,77 @@ def render(value: Any, ctx: dict[str, str]) -> Any:
     return _TEMPLATE.sub(lambda m: ctx.get(m.group(1), m.group(0)), value)
 
 
+class _StepLimit(ValueError):
+    pass
+
+
 async def run_action(rt: "Runtime", action: Action, ev: Event) -> int:
+    ctx = {key: value for key, value in build_context(ev).items() if not key.startswith("local_")}
+    actions = None
+    remaining = MAX_STEPS
     failures = 0
-    ctx = build_context(ev)
-    for index, step in enumerate(action.steps, start=1):
-        step_type = step.get("type")
-        handler = _HANDLERS.get(str(step_type))
-        if handler is None:
-            failures += 1
-            rt.log(f"[{action.name}] paso {index}: tipo desconocido '{step_type}'")
-            continue
-        literal = {"play_sound": {"file"}, "music_queue_add": {"query"}}.get(str(step_type), set())
-        params = {k: (v if k in literal else render(v, ctx)) for k, v in step.items() if k != "type"}
-        try:
-            if step_type in {"obs_scene", "obs_source_visible"}:
-                # OBS puede estar procesando una solicitud en un hilo. Mantenemos
-                # su bloqueo hasta recibir la respuesta antes de avanzar la cola.
-                request = asyncio.create_task(handler(rt, params, ev))
-                try:
-                    await asyncio.shield(request)
-                except asyncio.CancelledError:
-                    await asyncio.gather(request, return_exceptions=True)
-                    raise
-            else:
-                await handler(rt, params, ev)
-        except Exception as exc:  # un paso que falla no cancela los siguientes
-            failures += 1
-            rt.log(f"[{action.name}] paso {index} ({step_type}) falló: {exc}")
+    # El hijo comparte esta ejecución: no vuelve a entrar en el planificador de colas.
+    async def execute(current: Action, path: tuple[str, ...]) -> None:
+        nonlocal actions, remaining, failures
+        for index, step in enumerate(current.steps, start=1):
+            if not remaining:
+                raise _StepLimit("Se alcanzó el límite de pasos de una ejecución.")
+            remaining -= 1
+            step_type = step.get("type")
+            try:
+                if step_type in ("set_variable", "run_action", "condition"):
+                    validate_steps([step])
+                    if step_type == "set_variable":
+                        key = "local_" + step["key"]
+                        ctx[key] = render(step.get("value", ""), ctx)[:VALUE_LIMIT]
+                        continue
+                    if step_type == "run_action":
+                        target = step["action_id"]
+                    else:
+                        template = step.get("value", "")
+                        known = all(m.group(1) in ctx for m in _TEMPLATE.finditer(template))
+                        condition = evaluate(step["key"], step["operator"], render(template, ctx), ctx,
+                                             expected_known=known)
+                        target = step.get("then_id" if condition else "else_id")
+                    if not target:
+                        continue
+                    if target in path:
+                        raise ValueError("Se detuvo una llamada circular.")
+                    if len(path) >= MAX_DEPTH:
+                        raise ValueError("Se alcanzó el límite de 12 acciones anidadas.")
+                    if actions is None:
+                        actions = {item.id: item for item in rt.config.actions}
+                    child = actions.get(target)
+                    if child is None:
+                        raise ValueError("La acción seleccionada no existe.")
+                    await execute(child, (*path, target))
+                    continue
+                handler = _HANDLERS.get(str(step_type))
+                if handler is None:
+                    raise ValueError(f"tipo desconocido '{step_type}'")
+                literal = {"play_sound": {"file"}, "music_queue_add": {"query"}}.get(str(step_type), set())
+                params = {k: (v if k in literal else render(v, ctx)) for k, v in step.items() if k != "type"}
+                if step_type in ("obs_scene", "obs_source_visible"):
+                    # No liberar el bloqueo de OBS antes de concluir la solicitud en curso.
+                    request = asyncio.create_task(handler(rt, params, ev))
+                    try:
+                        await asyncio.shield(request)
+                    except asyncio.CancelledError:
+                        await asyncio.gather(request, return_exceptions=True)
+                        raise
+                else:
+                    await handler(rt, params, ev)
+            except _StepLimit:
+                raise
+            except Exception as exc:  # un paso que falla no cancela los siguientes
+                failures += 1
+                rt.log(f"[{current.name}] paso {index} ({step_type}) falló: {exc}")
+
+    try:
+        await execute(action, (action.id,))
+    except _StepLimit as exc:
+        rt.log(f"[{action.name}] {exc}")
+        failures += 1
     return failures
 
 

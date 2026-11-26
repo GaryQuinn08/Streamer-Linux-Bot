@@ -6,7 +6,7 @@ Aplicación de escritorio para Linux que automatiza tu stream: recibe eventos
 (chat, seguidores, regalos, donaciones...), los pasa por **triggers** y ejecuta
 **acciones** (alertas en pantalla, cambios de escena en OBS, sonidos, TTS...).
 
-## Beta 19 para Linux
+## Beta 20 para Linux
 
 Instalación desde el repositorio sin ZIP ni dependencias de Qt de APT.
 Conserva el perfil de la beta anterior, incluido el catálogo y las alertas
@@ -37,6 +37,10 @@ En **Historial** puedes pausar el inicio de nuevas acciones y cancelar una
 ejecución. Los disparadores admiten una espera por usuario; los de tipo
 `command` también admiten alias (por ejemplo `hola, saludo`).
 Consulta [cómo probar la automatización](docs/PARIDAD.md#automatización-beta-19).
+
+En **Subacciones** también puedes guardar variables locales, elegir entre dos
+acciones según una condición y reutilizar una acción existente sin duplicar sus
+pasos. Consulta [cómo crear y probar un flujo](docs/AUTOMATIZACION.md).
 
 En **Temporizadores**, elige una acción existente, establece el intervalo en segundos
 y actívalo. La primera ejecución espera un intervalo completo; si la acción anterior

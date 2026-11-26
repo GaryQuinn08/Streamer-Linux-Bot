@@ -5,6 +5,7 @@ import copy
 from uuid import uuid4
 
 from .config import Action, Config, Trigger
+from .flow import references, validate_links, validate_steps
 from .timers import read_timers, without_timers
 
 # key, label, type, default. Requests use only the action types listed here.
@@ -21,12 +22,23 @@ STEP_FIELDS = {
     "music_queue_add": ("Encolar canción local", (("query", "Archivo", "file", ""),)),
     "wait": ("Esperar", (("seconds", "Segundos", "number", 1),)),
     "log": ("Escribir en Registro", (("message", "Mensaje", "text", "{platform}: {type}"),)),
+    "set_variable": ("Guardar variable local", (
+        ("key", "Nombre (sin local_)", "required", "saludo"), ("value", "Valor o plantilla", "text", "Hola, {user}"))),
+    "run_action": ("Ejecutar otra acción aquí", (("action_id", "Acción", "action", ""),)),
+    "condition": ("Si / Si no", (
+        ("key", "Variable (sin llaves)", "required", "count"), ("operator", "Comparación", "operator", "gte"),
+        ("value", "Comparar con", "text", "3"), ("then_id", "Si se cumple", "optional_action", ""),
+        ("else_id", "Si no se cumple", "optional_action", ""))),
 }
 
 
 def action_references(config: Config, action_id: str):
     return ([item for item in config.triggers if item.action_id == action_id],
             [item for item in read_timers(config.settings) if item.action_id == action_id])
+
+
+def action_callers(config: Config, ident: str):
+    return [item for item in config.actions if item.id != ident and ident in references(item.steps)]
 
 
 def update_rules(config: Config, kind: str, data: dict, *, delete: bool = False) -> None:
@@ -40,6 +52,10 @@ def update_rules(config: Config, kind: str, data: dict, *, delete: bool = False)
     settings = config.settings
     if kind == "action":
         if delete:
+            callers = action_callers(config, ident)
+            if callers:
+                raise ValueError("Quita primero las referencias a esta acción en: " +
+                                 ", ".join(item.name for item in callers[:5]))
             trigger_refs, timer_refs = action_references(config, ident)
             expected = {"triggers": sorted({t.id for t in trigger_refs}), "timers": sorted({t.id for t in timer_refs})}
             confirmation = data.get("confirmed_dependencies")
@@ -55,7 +71,9 @@ def update_rules(config: Config, kind: str, data: dict, *, delete: bool = False)
             action = Action.from_dict({**data, "id": ident, "name": name})
             if not action.steps and not any(a.id == ident for a in actions):
                 raise ValueError("Agrega al menos un paso.")
+            validate_steps(action.steps)
             actions = _upsert(actions, action)
+            validate_links(action, actions)
     elif kind == "trigger":
         if delete:
             triggers = [t for t in triggers if t.id != ident]

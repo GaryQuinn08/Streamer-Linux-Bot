@@ -15,12 +15,19 @@ from PySide6.QtWidgets import (
 
 from ..connectors.simulator import sample_event
 from ..core.config import Action
-from ..core.editing import STEP_FIELDS, action_references
+from ..core.editing import STEP_FIELDS, action_callers, action_references
+from ..core.flow import OPERATORS, VALUELESS_OPERATORS, validate_steps
 from ..overlay_manager import list_overlays
 from .deletion import confirm_delete, delete_shortcut
 
 
 def confirm_action_deletion(parent, config, item):
+    callers = action_callers(config, item.id)
+    if callers:
+        names = ", ".join(action.name[:80] for action in callers[:5])
+        QMessageBox.information(parent, "Acción en uso",
+                               "Quita primero las referencias en estas acciones: " + names)
+        return None
     triggers, timers = action_references(config, item.id)
     message = f"¿Eliminar la acción «{item.name}»?"
     for label, refs in (("Disparadores", triggers), ("Temporizadores", timers)):
@@ -153,9 +160,10 @@ class TriggerForm(Form):
 
 
 class StepForm(Form):
-    def __init__(self, parent, data):
+    def __init__(self, parent, data, actions=(), current_id=None):
         super().__init__(parent, "Editar paso")
         self.original = data
+        self.action_choices = [(a.name, a.id) for a in actions if a.id != current_id]
         self.kind = combo([(label, key) for key, (label, _) in STEP_FIELDS.items()], data.get("type"))
         self.form.addRow("Tipo", self.kind)
         self.dynamic = QFormLayout()
@@ -179,6 +187,13 @@ class StepForm(Form):
                 widget = combo([(o.name, o.id) for o in list_overlays().values()
                                 if o.id not in {"event-feed", "live-goal", "multi-chat"}], value)
                 row = widget
+            elif mode in {"action", "optional_action"}:
+                options = [("Elige una acción" if mode == "action" else "No hacer nada", "")]
+                widget = combo(options + self.action_choices, value)
+                row = widget
+            elif mode == "operator":
+                widget = combo([(title, code) for code, title in OPERATORS.items()], value)
+                row = widget
             elif mode == "file":
                 widget = QLineEdit(str(value))
                 row = QHBoxLayout()
@@ -191,6 +206,22 @@ class StepForm(Form):
                 row = widget
             self.fields[key] = (mode, widget)
             self.dynamic.addRow(label, row)
+        hints = {
+            "set_variable": "Este ejemplo se usa como {local_saludo}. Cada ejecución tiene sus propios valores.",
+            "run_action": "Sus pasos se ejecutan aquí y comparten las variables locales; no se agrega otra ejecución a la cola.",
+            "condition": "Por ejemplo, count mayor o igual a 3. Puedes comparar con otra variable usando {local_nombre}.",
+        }
+        if kind in hints:
+            hint = QLabel(hints[kind])
+            hint.setWordWrap(True)
+            self.dynamic.addRow(hint)
+        if kind == "condition":
+            operator = self.fields["operator"][1]
+            value_field = self.fields["value"][1]
+            def sync_compare():
+                value_field.setEnabled(operator.currentData() not in VALUELESS_OPERATORS)
+            operator.currentIndexChanged.connect(sync_compare)
+            sync_compare()
 
     def pick(self, widget):
         name, _ = QFileDialog.getOpenFileName(self, "Selecciona audio", str(Path.home()))
@@ -205,8 +236,10 @@ class StepForm(Form):
         data = dict(self.original) if kind == self.original.get("type") else {}
         data["type"] = kind
         for key, (mode, field) in self.fields.items():
-            value = field.isChecked() if mode == "bool" else field.currentData() if mode == "overlay" else field.text().strip()
-            if mode in {"required", "file", "number", "overlay"} and not value:
+            value = field.isChecked() if mode == "bool" else (
+                field.currentData() if mode in {"overlay", "action", "optional_action", "operator"} else field.text().strip()
+            )
+            if mode in {"required", "file", "number", "overlay", "action"} and not value:
                 QMessageBox.warning(self, "Paso incompleto", f"Completa el campo «{key}».")
                 return
             if mode == "number":
@@ -218,14 +251,20 @@ class StepForm(Form):
                     QMessageBox.warning(self, "Duración", "Escribe de 0 a 3600 segundos.")
                     return
             data[key] = value
+        try:
+            validate_steps([data])
+        except ValueError as error:
+            QMessageBox.warning(self, "Configuración", str(error))
+            return
         self.result_data = data
         super().accept()
 
 
 class ActionForm(Form):
-    def __init__(self, parent, data):
+    def __init__(self, parent, data, actions=()):
         super().__init__(parent, "Editar acción")
         self.original = data
+        self.actions = actions
         self.name = QLineEdit(data.get("name", ""))
         self.form.addRow("Nombre", self.name)
         self.queue = QLineEdit(data.get("queue", ""))
@@ -258,7 +297,7 @@ class ActionForm(Form):
         i = -1 if new else self.list.currentRow()
         if not new and i < 0:
             return
-        form = StepForm(self, self.steps[i] if i >= 0 else {})
+        form = StepForm(self, self.steps[i] if i >= 0 else {}, self.actions, self.original.get("id"))
         if form.exec():
             if i < 0:
                 i = len(self.steps)
@@ -342,7 +381,7 @@ class RulesPanel(QWidget):
         if not new and item is None:
             return
         data = item.to_dict() if item else {}
-        form = TriggerForm(self, data, self.rt.config.actions) if self.kind == "trigger" else ActionForm(self, data)
+        form = TriggerForm(self, data, self.rt.config.actions) if self.kind == "trigger" else ActionForm(self, data, self.rt.config.actions)
         if form.exec():
             self.send(self.rt.edit_rule(self.kind, form.result_data))
 
@@ -556,9 +595,15 @@ class ActionWorkspace(QWidget):
         self._fill(self.trigger_table, [(t.name, "Cualquiera" if t.platform == "*" else t.platform,
                                          t.event_type, "Activo" if t.enabled else "Inactivo")
                                         for t in self.triggers], min(self._trigger_selection, len(self.triggers) - 1))
+        names = {item.id: item.name for item in self.rt.config.actions}
+        def detail(step):
+            return " · ".join(
+                names.get(str(value), "Acción no encontrada") if key in {"action_id", "then_id", "else_id"}
+                else OPERATORS.get(str(value), str(value)) if key == "operator" else str(value)
+                for key, value in step.items() if key not in {"type", "id"} and value != ""
+            )
         self._fill(self.step_table, [(STEP_FIELDS.get(str(s.get("type")), (s.get("type", "Desconocida"),))[0],
-                                     " · ".join(str(v) for k, v in s.items() if k not in {"type", "id"} and v != ""))
-                                    for s in steps], min(self._step_selection, len(steps) - 1))
+                                     detail(s)) for s in steps], min(self._step_selection, len(steps) - 1))
         self.trigger_count.setText(str(len(self.triggers)))
         self.step_count.setText(str(len(steps)))
         self._update_tools()
@@ -598,7 +643,7 @@ class ActionWorkspace(QWidget):
         if not new and not self.action:
             return
         data = {"id": uuid4().hex} if new else self.action.to_dict()
-        dialog = ActionForm(self, data)
+        dialog = ActionForm(self, data, self.rt.config.actions)
         if not dialog.exec():
             return
         if new:
@@ -639,7 +684,7 @@ class ActionWorkspace(QWidget):
         row = len(steps) if new else self.step_table.currentRow()
         if not new and (not self.step_table.selectedItems() or row >= len(steps)):
             return
-        dialog = StepForm(self, {} if new else steps[row])
+        dialog = StepForm(self, {} if new else steps[row], self.rt.config.actions, self.action.id)
         if dialog.exec():
             if new:
                 steps.append(dialog.result_data)
