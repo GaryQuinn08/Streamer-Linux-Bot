@@ -4,11 +4,16 @@ Aplicación de escritorio para Linux que automatiza tu stream: recibe eventos
 (chat, seguidores, regalos, donaciones...), los pasa por **triggers** y ejecuta
 **acciones** (alertas en pantalla, cambios de escena en OBS, sonidos, TTS...).
 
-## Beta 3 para Linux
+## Beta 4 para Linux
 
 Instalación desde el repositorio sin ZIP ni dependencias de Qt de APT.
 Conserva el perfil de la beta anterior, incluido el catálogo y las alertas
 importadas. Cierra la app anterior antes de abrir la nueva.
+
+El espacio de automatización pone **Acciones, Triggers y Subacciones**
+juntos. Las conexiones, el catálogo, la música y el registro tienen su
+propia sección. TikTok directo no necesita TikFinity ni inicio de sesión:
+funciona con el @ en directo y el conector opcional no oficial.
 
 ### Linux Mint, Ubuntu o Debian
 
@@ -38,7 +43,8 @@ estable apunta a la instalación más reciente; no borra versiones anteriores.
 
 - [OBS, TikTok LIVE Studio y modo servidor por SSH](docs/TRANSMISION.md).
 - [TikTok / TikFinity, Twitch, YouTube y Kick](docs/CONECTORES.md).
-- [Sonido, cola local y Piper](docs/AUDIO.md).
+- [Música, sonido y Piper](docs/AUDIO.md).
+- [Configurar clientes OAuth como mantenedor](docs/OAUTH.md).
 
 El control de escenas y fuentes usa el WebSocket v5 de **OBS Studio**.
 En **TikTok LIVE Studio** la integración es por una fuente **Enlace**, no
@@ -58,7 +64,7 @@ python3 -m venv .venv
 
 ## Probar que todo funciona
 
-1. Abre la app y ve a **Inicio**.
+1. Abre la app y ve a **Conexiones**.
 2. Pulsa **Regalo (TikTok)**: se dispara el trigger "Regalo de TikTok", que
    ejecuta la acción "Alerta de regalo". Verás las líneas en **Registro**.
 3. Ve a **Overlays**, elige "Alerta de regalos", pulsa **Abrir en el navegador**
@@ -82,31 +88,32 @@ Una acción "overlay_alert" envía una alerta solo al overlay seleccionado.
 
 ## Catálogo, alertas y puerto
 
-- En **Inicio** abre **Abrir catálogo de alertas** para ver las alertas
+- En **Conexiones** abre **Abrir catálogo de alertas** para ver las alertas
   incluidas, creadas e importadas en la misma página de siempre.
 - En **Overlays** puedes ajustar valores como color, duración y tamaño,
   guardarlos y probar la alerta. La URL no cambia al guardar: actualiza la
   fuente de OBS. Si tu URL antigua trae parámetros después de `?`, esos
   parámetros prevalecen; copia la URL limpia para usar lo guardado.
 - **Nueva alerta** crea una copia editable de la alerta animada. Selecciónala
-  en **Triggers → Mostrar en** para usarla con la regla de regalos.
+  en **Regla de regalos → Mostrar en** para usarla con la regla de regalos.
 - Se aceptan ZIP o carpetas con `manifest.json` e `index.html`, y HTML
   independiente. El HTML antiguo se muestra, pero no recibe eventos
   automáticamente sin adaptarlo al SDK; no se convierten exportaciones
   propietarias de otras aplicaciones.
 - Si el puerto anterior está ocupado, abre igual la ventana y deja el campo
-  en blanco. Escribe otro puerto en **Inicio → Puerto de overlays**.
+  en blanco. Escribe otro puerto en **Conexiones → Puerto de overlays**.
   Solo se guarda cuando el servidor consigue escucharlo. Si cambias un
   puerto activo, actualiza su URL en OBS una sola vez.
 
 ## Automatización sin editar JSON
 
-En **Acciones**, crea una secuencia: mostrar alerta, cambiar escena de OBS,
-reproducir sonido, leer texto, etc. Puedes reordenar pasos y probar la
-acción seleccionada con un regalo simulado (los cambios de OBS y audio son
-reales si están configurados). En **Todos los triggers**, elige qué
-plataforma y evento lanzan esa acción, con filtros y tiempo de espera.
-Para lo común, **Triggers** mantiene la regla rápida de regalo de TikTok.
+En **Acciones**, elige o crea una acción a la izquierda. A la derecha se
+ven sus **Disparadores** y sus **Subacciones**: agrega qué inicia la acción,
+qué pasos ejecuta y en qué orden. Por ejemplo, un regalo puede mostrar
+una alerta, cambiar la escena en OBS y reproducir un sonido. El botón de
+prueba usa un regalo simulado, pero ejecuta los pasos reales configurados.
+También tienes una vista global de **Disparadores** y una **Regla de
+regalos** rápida para TikTok.
 
 ## Configuración
 

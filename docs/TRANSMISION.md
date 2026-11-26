@@ -5,7 +5,7 @@
 - **OBS Studio (Linux):** en Overlays copia la URL de una alerta.
   En OBS añade una Fuente de navegador con esa URL. Eso basta para ver la
   alerta. Para que una acción cambie una escena o visibilidad, habilita
-  WebSocket v5 en OBS y conecta **Inicio → OBS Studio** por separado.
+  WebSocket v5 en OBS y conecta **Conexiones → OBS Studio** por separado.
 - **TikTok LIVE Studio:** en el equipo con LIVE Studio, comprueba primero
   que la URL abre en su navegador. Luego selecciona **Añadir fuente →
   Enlace**, pega la URL de una alerta (no la del catálogo) y ajusta el

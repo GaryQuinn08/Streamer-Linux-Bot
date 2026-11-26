@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QInputDialog,
     QHeaderView,
@@ -28,11 +29,11 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QSpinBox,
+    QStackedWidget,
     QScrollArea,
     QGroupBox,
     QTableWidget,
     QTableWidgetItem,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -40,7 +41,7 @@ from PySide6.QtWidgets import (
 from ..connectors.simulator import SAMPLE_KINDS, sample_event
 from ..overlay_manager import OverlayInfo, create_alert, import_overlay, list_overlays, validate_overlay_values
 from ..runtime import Runtime
-from .rule_editor import RulesPanel
+from .rule_editor import ActionWorkspace, RulesPanel
 from .platform_login import PlatformLoginPanel
 
 SAMPLE_LABELS = {
@@ -103,16 +104,11 @@ class HomeTab(QWidget):
         self.port_result.setWordWrap(True)
         overlay_form.addRow(self.port_result)
         self.bridge.overlay_port_done.connect(self._overlay_port_done)
-        layout.addWidget(overlay_group)
-
-        layout.addWidget(QLabel("<b>Conexiones</b>"))
         self.table = QTableWidget(0, 2)
         self.table.setHorizontalHeaderLabels(["Conexión", "Estado"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
-        layout.addWidget(self.table)
-
         obs_group = QGroupBox("OBS Studio")
         obs_form = QFormLayout(obs_group)
         obs_cfg = runtime.config.settings["obs"]
@@ -146,20 +142,21 @@ class HomeTab(QWidget):
                           "solo las acciones que controlan escenas o fuentes.")
         obs_hint.setWordWrap(True)
         obs_form.addRow(obs_hint)
-        layout.addWidget(obs_group)
-
         tiktok_group = QGroupBox("TikTok LIVE · experimental")
         tiktok_form = QFormLayout(tiktok_group)
         self.tiktok_mode = QComboBox()
-        self.tiktok_mode.addItem("TikTok directo (conector opcional)", "directo")
-        self.tiktok_mode.addItem("TikFinity (Event API local)", "tikfinity")
+        self.tiktok_mode.addItem("TikTok directo · sin TikFinity", "directo")
+        self.tiktok_mode.addItem("TikFinity · puente opcional", "tikfinity")
         self.tiktok_channel = QLineEdit()
         self.tiktok_channel.setPlaceholderText("@usuario en directo")
-        self.tiktok_mode.currentIndexChanged.connect(
-            lambda: self.tiktok_channel.setEnabled(self.tiktok_mode.currentData() == "directo")
-        )
+        self.tiktok_mode.currentIndexChanged.connect(self._update_tiktok_mode)
         tiktok_form.addRow("Conector:", self.tiktok_mode)
-        tiktok_form.addRow("Usuario:", self.tiktok_channel)
+        tiktok_form.addRow("Canal:", self.tiktok_channel)
+        self.tiktok_hint = QLabel()
+        self.tiktok_hint.setObjectName("tiktok-mode-hint")
+        self.tiktok_hint.setWordWrap(True)
+        tiktok_form.addRow(self.tiktok_hint)
+        self._update_tiktok_mode()
         tiktok_row = QHBoxLayout()
         connect_tiktok = QPushButton("Conectar TikTok")
         connect_tiktok.clicked.connect(self._connect_tiktok)
@@ -169,33 +166,34 @@ class HomeTab(QWidget):
         tiktok_row.addWidget(disconnect_tiktok)
         tiktok_row.addStretch(1)
         tiktok_form.addRow(tiktok_row)
-        layout.addWidget(tiktok_group)
-
         self.platform_login = PlatformLoginPanel(runtime)
         layout.addWidget(self.platform_login)
+        layout.addWidget(tiktok_group)
 
-        layout.addWidget(QLabel("<b>Enviar un evento de prueba</b> (pasa por los triggers y los overlays)"))
+        sample_group = QGroupBox("Eventos de prueba")
+        sample_layout = QVBoxLayout(sample_group)
+        sample_caption = QLabel("Los eventos simulados pasan por los disparadores y overlays. No necesitan cuenta.")
+        sample_caption.setProperty("muted", True)
+        sample_caption.setWordWrap(True)
+        sample_layout.addWidget(sample_caption)
         tests = QHBoxLayout()
         for kind in SAMPLE_KINDS:
             button = QPushButton(SAMPLE_LABELS[kind])
             button.clicked.connect(functools.partial(self._send_sample, kind))
             tests.addWidget(button)
         tests.addStretch(1)
-        layout.addLayout(tests)
-        audio = QGroupBox("Música local (mpv)")
-        audio_form = QFormLayout(audio)
-        self.music_label = QLabel()
-        self.music_label.setTextFormat(Qt.PlainText)
-        audio_form.addRow(self.music_label)
-        music_row = QHBoxLayout()
-        add_track = QPushButton("Encolar archivo…")
-        add_track.clicked.connect(self._enqueue_track)
-        clear_tracks = QPushButton("Detener y vaciar")
-        clear_tracks.clicked.connect(lambda: self.rt.submit(self.rt.music.clear()))
-        music_row.addWidget(add_track)
-        music_row.addWidget(clear_tracks)
-        audio_form.addRow(music_row)
-        layout.addWidget(audio)
+        sample_layout.addLayout(tests)
+        layout.addWidget(sample_group)
+        layout.addWidget(obs_group)
+        layout.addWidget(overlay_group)
+
+        connection_status = QGroupBox("Estado de los conectores")
+        status_layout = QVBoxLayout(connection_status)
+        status_layout.setContentsMargins(3, 3, 3, 3)
+        self.table.verticalHeader().setDefaultSectionSize(26)
+        self.table.setMinimumHeight(166)
+        status_layout.addWidget(self.table)
+        layout.addWidget(connection_status)
         layout.addStretch(1)
 
         self.refresh()
@@ -248,19 +246,16 @@ class HomeTab(QWidget):
             self.tiktok_mode.currentData(), self.tiktok_channel.text()
         ))
 
-    def _enqueue_track(self) -> None:
-        name, _ = QFileDialog.getOpenFileName(self, "Elige música local", str(Path.home()),
-            "Audio (*.wav *.mp3 *.ogg *.opus *.flac *.m4a *.aac)")
-        if not name:
-            return
-
-        async def enqueue():
-            try:
-                self.rt.music.enqueue(name)
-            except (ValueError, RuntimeError) as exc:
-                self.rt.log(f"Música: {exc}")
-
-        self.rt.submit(enqueue())
+    def _update_tiktok_mode(self, _index=None) -> None:
+        direct = self.tiktok_mode.currentData() == "directo"
+        self.tiktok_channel.setEnabled(direct)
+        self.tiktok_hint.setText(
+            "Solo escribe tu @usuario cuando estés en vivo. No necesitas iniciar sesión ni instalar "
+            "TikFinity. Usa la biblioteca no oficial TikTokLive (instalación: --tiktok)."
+            if direct else
+            "Usa este modo solo si ya tienes TikFinity enviando eventos a su API local. "
+            "Es una alternativa; no se necesita para usar TikTok directo."
+        )
 
     def _send_sample(self, kind: str) -> None:
         self.rt.emit(sample_event(kind))
@@ -271,8 +266,6 @@ class HomeTab(QWidget):
                                   else self.rt.overlay_port_message or "Asigna un puerto para activar los overlays.")
         self.open_catalog.setEnabled(port is not None)
         self.platform_login.refresh()
-        self.music_label.setText("En reproducción: " + self.rt.music.current
-                                 if self.rt.music.current else "Sin reproducción activa.")
         self.connect_obs.setEnabled(self.rt.obs.status != "conectando…")
         connectors = list(self.rt.connectors.values())
         if self.table.rowCount() != len(connectors):
@@ -326,7 +319,7 @@ class TriggersTab(QWidget):
         self.save_button = QPushButton("Guardar regla")
         self.save_button.clicked.connect(self._save_rule)
         form.addRow(self.save_button)
-        self.result = QLabel("El botón de Inicio simula Rose ×3. Usa «Rose» o deja el filtro vacío para probar.")
+        self.result = QLabel("El botón de Conexiones simula Rose ×3. Usa «Rose» o deja el filtro vacío para probar.")
         self.result.setWordWrap(True)
         form.addRow(self.result)
         layout.addWidget(editor)
@@ -403,7 +396,7 @@ class TriggersTab(QWidget):
 
     def _saved(self, error: str) -> None:
         self.save_button.setEnabled(True)
-        self.result.setText(f"No se pudo guardar: {error}" if error else "Regla guardada. Prueba el regalo desde Inicio.")
+        self.result.setText(f"No se pudo guardar: {error}" if error else "Regla guardada. Prueba el regalo desde Conexiones.")
         if not error:
             self._refresh()
 
@@ -509,7 +502,13 @@ class OverlaysTab(QWidget):
         right.addLayout(buttons)
         right.addWidget(hint)
         right.addStretch(1)
-        root.addLayout(right, 1)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        detail = QWidget()
+        right.setContentsMargins(4, 0, 6, 0)
+        detail.setLayout(right)
+        scroll.setWidget(detail)
+        root.addWidget(scroll, 1)
 
         self.bridge.overlay_saved.connect(self._preset_saved)
         self.bridge.overlay_port_done.connect(lambda _error: self._update_url())
@@ -751,50 +750,219 @@ class OverlaysTab(QWidget):
 # Ventana principal
 # --------------------------------------------------------------------------
 
+# Top-level workbench palette: a dark native desktop with a restrained mint accent.
+WORKBENCH_STYLE = """
+QMainWindow, QWidget#desktop-workbench { background: #12161d; color: #edf0f5; }
+QWidget { color: #e0e5ed; }
+QLabel[muted="true"] { color: #aab6c5; }
+QFrame#workbench-sidebar { background: #191e27; border-right: 1px solid #2b3441; }
+QLabel#workbench-brand { color: #edf3fa; font-size: 16px; font-weight: 700; }
+QLabel#workbench-mark {
+    background: #163f39; color: #88f0cb; border: 1px solid #317861;
+    border-radius: 7px; font-size: 12px; font-weight: 700;
+}
+QLabel[navSection="true"] { color: #9caabc; font-size: 10px; font-weight: 700; padding: 8px 8px 3px; }
+QPushButton[nav="true"] {
+    text-align: left; border: 1px solid transparent; background: transparent; color: #c0ccda;
+    padding: 8px 10px; border-radius: 5px;
+}
+QPushButton[nav="true"]:hover { background: #262f3d; color: #f1f8ff; }
+QPushButton[nav="true"]:checked { background: #24423e; border-color: #3a7a67; color: #a3f2d4; font-weight: 700; }
+QLabel#workbench-heading { font-size: 24px; font-weight: 700; color: #f2f6fc; }
+QLabel#workbench-description { color: #a4b0c0; padding-bottom: 2px; }
+QLabel#workbench-mode { border: 1px solid #3d4858; color: #b3c2d0; border-radius: 5px; padding: 4px 7px; }
+QFrame#workbench-pane { background: #191f29; border: 1px solid #303b4a; border-radius: 8px; }
+QLabel#workbench-pane-title { color: #edf3fa; font-size: 13px; font-weight: 700; }
+QLabel#workbench-count { color: #acebcf; background: #233e3a; padding: 3px 7px; border-radius: 5px; }
+QLabel#workbench-notice { color: #adb9c8; padding: 3px 0; }
+QLabel#tiktok-mode-hint { color: #b3c4cf; }
+QWidget#desktop-workbench QStackedWidget, QScrollArea { border: 0; }
+QScrollArea > QWidget > QWidget { background: #12161d; }
+QScrollBar:vertical { background: #18212b; width: 9px; margin: 0; border-radius: 4px; }
+QScrollBar:horizontal { background: #18212b; height: 9px; margin: 0; border-radius: 4px; }
+QScrollBar::handle { background: #526377; border: 1px solid #18212b; border-radius: 4px; }
+QScrollBar::handle:vertical { min-height: 24px; }
+QScrollBar::handle:horizontal { min-width: 24px; }
+QScrollBar::handle:hover { background: #687e94; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
+QScrollBar::add-page, QScrollBar::sub-page { background: none; }
+QGroupBox { border: 1px solid #364353; border-radius: 7px; margin-top: 10px; padding: 10px 8px 7px; font-weight: 700; }
+QGroupBox::title { subcontrol-origin: margin; left: 9px; padding: 0 5px; color: #e0e8f1; }
+QPushButton { padding: 5px 8px; background: #283241; border: 1px solid #435269; border-radius: 5px; }
+QPushButton:hover { background: #34465a; border-color: #61788e; }
+QPushButton:focus, QLineEdit:focus, QComboBox:focus { border-color: #6ebca2; }
+QPushButton[role="primary"] { color: #b3f5df; background: #275046; border-color: #42866f; font-weight: 600; }
+QPushButton[role="primary"]:hover { background: #32685a; }
+QPushButton:disabled { color: #8190a2; background: #242b35; border-color: #333c46; }
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit, QListWidget, QTableWidget {
+    background: #141922; border: 1px solid #394657; border-radius: 5px;
+    selection-background-color: #2e6157; selection-color: #ffffff;
+}
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit { padding: 4px 6px; }
+QListWidget::item { padding: 5px; }
+QTableWidget { alternate-background-color: #19212b; gridline-color: #2e3948; }
+QTableWidget::item { padding-left: 6px; }
+QHeaderView::section { background: #263140; color: #cbd5e2; border: 0; padding: 5px 6px; }
+QStatusBar { background: #191e27; color: #c1cddb; border-top: 1px solid #303b4a; }
+QStatusBar::item { border: none; }
+QMenu, QDialog, QMessageBox { background: #1d2530; color: #edf2f8; }
+QMenu::item:selected { background: #2e6157; color: #fff; }
+QToolTip { background: #202b39; color: #f2f6fc; border: 1px solid #456073; padding: 4px; }
+"""
+
+
 class MainWindow(QMainWindow):
     def __init__(self, runtime: Runtime, bridge: LogBridge) -> None:
         super().__init__()
         self.rt = runtime
         self.setWindowTitle("Streamer Linux Bot · Editor de perfil" if runtime.editor_only else "Streamer Linux Bot")
-        self.resize(960, 640)
+        self.resize(1100, 720)
+        self.setMinimumSize(760, 535)
+        self.setStyleSheet(WORKBENCH_STYLE)
+
+        shell = QWidget()
+        shell.setObjectName("desktop-workbench")
+        outer = QHBoxLayout(shell)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        sidebar = QFrame()
+        sidebar.setObjectName("workbench-sidebar")
+        sidebar.setFixedWidth(172)
+        side = QVBoxLayout(sidebar)
+        side.setContentsMargins(11, 15, 11, 12)
+        side.setSpacing(4)
+        brand = QHBoxLayout()
+        brand.setSpacing(8)
+        mark = QLabel("SL")
+        mark.setObjectName("workbench-mark")
+        mark.setFixedSize(29, 29)
+        mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        brand.addWidget(mark)
+        title = QLabel("Streamer\nLinux Bot")
+        title.setObjectName("workbench-brand")
+        brand.addWidget(title)
+        brand.addStretch(1)
+        side.addLayout(brand)
+        side.addSpacing(9)
+        outer.addWidget(sidebar)
+
+        center = QVBoxLayout()
+        center.setContentsMargins(17, 14, 17, 10)
+        center.setSpacing(10)
+        header = QHBoxLayout()
+        words = QVBoxLayout()
+        words.setSpacing(2)
+        self.heading = QLabel()
+        self.heading.setObjectName("workbench-heading")
+        self.description = QLabel()
+        self.description.setObjectName("workbench-description")
+        self.description.setWordWrap(True)
+        words.addWidget(self.heading)
+        words.addWidget(self.description)
+        header.addLayout(words, 1)
+        mode = QLabel("EDITOR DE PERFIL" if runtime.editor_only else "MODO LOCAL")
+        mode.setObjectName("workbench-mode")
+        header.addWidget(mode, 0, Qt.AlignmentFlag.AlignTop)
+        center.addLayout(header)
+        self.pages = QStackedWidget()
+        self.pages.setObjectName("workbench-pages")
+        center.addWidget(self.pages, 1)
+        outer.addLayout(center, 1)
+        self.setCentralWidget(shell)
 
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
         self.log_view.setMaximumBlockCount(2000)
+        self.log_view.setPlaceholderText("No hay actividad todavía.")
         for line in runtime.log_history:
             self.log_view.appendPlainText(line)
         bridge.message.connect(self.log_view.appendPlainText)
-
-        tabs = QTabWidget()
-        if runtime.editor_only:
-            help_editor = QLabel("Editor de perfil: no abre puertos ni transmite. "
-                                 "Guarda los cambios y recarga el servidor desde terminal para aplicarlos.")
-            help_editor.setWordWrap(True)
-            help_editor.setMargin(18)
-            tabs.addTab(help_editor, "Inicio")
-        else:
-            tabs.addTab(HomeTab(runtime, bridge), "Inicio")
-        tabs.addTab(TriggersTab(runtime, bridge), "Triggers")
-        tabs.addTab(RulesPanel(runtime, "action", bridge.rules_changed), "Acciones")
+        self.action_page = ActionWorkspace(runtime, bridge.rules_changed)
+        self.trigger_page = RulesPanel(runtime, "trigger", bridge.rules_changed)
+        self.quick_page = TriggersTab(runtime, bridge)
+        self.overlays_page = OverlaysTab(runtime, bridge)
         bridge.gift_save_done.connect(lambda error: bridge.rules_changed.emit("quick") if not error else None)
-        tabs.addTab(OverlaysTab(runtime, bridge), "Overlays")
-        tabs.addTab(self.log_view, "Registro")
+
+        if runtime.editor_only:
+            self.connections_page = QLabel("Editor de perfil: no abre puertos ni transmite. "
+                                           "Guarda los cambios y recarga el servidor desde terminal para aplicarlos.")
+            self.connections_page.setWordWrap(True)
+            self.connections_page.setAlignment(Qt.AlignmentFlag.AlignTop)
+            self.connections_page.setMargin(12)
+        else:
+            from .music_panel import MusicPanel
+
+            self.connections_page = HomeTab(runtime, bridge)
+            self.music_page = MusicPanel(runtime)
+
+        self.navigation = {}
+
+        def add_group(name):
+            label = QLabel(name)
+            label.setProperty("navSection", True)
+            side.addWidget(label)
+
+        def add_page(key, title_text, help_text, page):
+            idx = self.pages.addWidget(page)
+            button = QPushButton(title_text)
+            button.setCheckable(True)
+            button.setProperty("nav", True)
+            button.setObjectName(f"navigate-{key}")
+            button.clicked.connect(lambda _checked=False: self.select_page(key))
+            side.addWidget(button)
+            self.navigation[key] = (idx, title_text, help_text, button)
+
+        add_group("AUTOMATIZACIÓN")
+        add_page("actions", "Acciones", "Edita los disparadores y los pasos de una acción desde un solo lugar.", self.action_page)
+        add_page("triggers", "Disparadores", "Consulta todos los eventos que activan tus acciones.", self.trigger_page)
+        add_page("gifts", "Regla de regalos", "Configura rápidamente la alerta predeterminada de TikTok.", self.quick_page)
+        add_group("TRANSMISIÓN")
+        add_page("connections", "Conexiones", "Conecta tus cuentas, prepara OBS o prueba un evento simulado.", self.connections_page)
+        add_page("overlays", "Overlays", "Personaliza tus alertas y copia el enlace para OBS o TikTok LIVE Studio.", self.overlays_page)
+        if not runtime.editor_only:
+            add_page("music", "Música", "Gestiona fuentes de audio y su cola de reproducción.", self.music_page)
+        add_group("MONITOR")
+        add_page("log", "Registro", "Revisa eventos, conexiones y errores de esta sesión.", self.log_view)
         guide = QLabel(
             "<h2>Tu primera alerta</h2>"
             "<ol><li>En <b>Overlays</b>, selecciona <b>Alerta de regalos</b> y copia su URL.</li>"
-            "<li>En OBS, añade una <b>Fuente de navegador</b>, pega la URL y deja la fuente visible.</li>"
-            "<li>En TikTok LIVE Studio, si está disponible, usa <b>Añadir fuente → Enlace</b>. "
-            "Si el bot está en otro equipo, sigue la guía del repositorio para crear un túnel privado.</li>"
-            "<li>Vuelve a <b>Inicio</b> y pulsa <b>Regalo (TikTok)</b> para simular una Rosa ×3.</li>"
-            "<li>En <b>Triggers</b> puedes cambiar el título, el filtro y el sonido de la alerta.</li></ol>"
-            "<p>Si no aparece, revisa que el navegador de OBS tenga la URL correcta y vuelve a pulsar "
-            "el botón con la fuente visible. El resultado también se registra en <b>Registro</b>.</p>"
-            "<p>Los eventos simulados no necesitan una cuenta. La conexión de OBS por WebSocket "
-            "es independiente de la fuente de navegador.</p>"
+            "<li>En OBS añade una <b>Fuente de navegador</b>, pega la URL y deja la fuente visible. "
+            "En TikTok LIVE Studio, usa una fuente <b>Enlace</b> si la opción está disponible.</li>"
+            "<li>En <b>Conexiones</b>, pulsa <b>Regalo (TikTok)</b> para simular una Rosa ×3.</li>"
+            "<li>Desde <b>Acciones</b> puedes editar qué eventos disparan la alerta y en qué orden se ejecutan sus pasos.</li></ol>"
+            "<p>Para TikTok en vivo, usa <b>TikTok directo</b> con tu @usuario y el conector no oficial "
+            "TikTokLive. TikFinity es un puente alternativo, no un requisito.</p>"
+            "<p>Los eventos simulados no necesitan cuenta. El control de OBS por WebSocket se usa "
+            "para escenas y fuentes; no hace falta para mostrar una alerta en el navegador.</p>"
         )
         guide.setWordWrap(True)
-        guide.setMargin(18)
-        guide.setAlignment(Qt.AlignTop)
-        tabs.addTab(guide, "Primeros pasos")
-        tabs.addTab(RulesPanel(runtime, "trigger", bridge.rules_changed), "Todos los triggers")
-        self.setCentralWidget(tabs)
+        guide.setMargin(15)
+        guide.setAlignment(Qt.AlignmentFlag.AlignTop)
+        add_page("guide", "Guía rápida", "Configura y prueba tu primera alerta.", guide)
+        side.addStretch(1)
+        self.select_page("actions")
+
+        self.footer = QLabel()
+        self.footer.setObjectName("workbench-status")
+        self.statusBar().addWidget(self.footer, 1)
+        self.statusBar().setSizeGripEnabled(True)
+        bridge.overlay_port_done.connect(lambda _error: self._update_status())
+        self._update_status()
+
+    def _update_status(self):
+        if self.rt.editor_only:
+            state = "Editor de perfil · Sin servidor local"
+        elif self.rt.port is None:
+            state = "Overlays sin conectar · Revisa el puerto en Conexiones"
+        else:
+            state = f"Overlays activos · 127.0.0.1:{self.rt.port}"
+        self.footer.setText(state)
+
+    def select_page(self, key):
+        index, title, help_text, _button = self.navigation[key]
+        self.pages.setCurrentIndex(index)
+        for other, (_index, _title, _text, button) in self.navigation.items():
+            button.setChecked(key == other)
+        self.heading.setText(title)
+        self.description.setText(help_text)

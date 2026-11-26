@@ -23,6 +23,7 @@ from .connectors.obs import ObsConnector
 from .connectors.kick import KickConnector
 from .connectors.platforms import TwitchConnector, YoutubeConnector
 from .connectors.tiktok import TiktokConnector
+from .connectors.spotify import SpotifyConnector
 from .core.config import Config, DEFAULT_ACTIONS, DEFAULT_TRIGGERS, Action, Trigger
 from .core.engine import Engine
 from .core.editing import update_rules
@@ -66,6 +67,7 @@ class Runtime:
             "youtube": YoutubeConnector(self),
             "kick": KickConnector(self),
             "tiktok": TiktokConnector(self),
+            "spotify": SpotifyConnector(self),
         }
 
     # -- utilidades --------------------------------------------------------

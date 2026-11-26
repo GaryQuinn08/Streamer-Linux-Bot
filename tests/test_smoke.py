@@ -243,7 +243,8 @@ class UiTests(RuntimeCase):
 
         app = QApplication.instance() or QApplication([])
         window = MainWindow(self.rt, LogBridge())
-        self.assertEqual(window.centralWidget().count(), 7)
+        self.assertEqual(window.pages.count(), 8)
+        self.assertEqual(window.pages.currentWidget(), window.action_page)
         window.close()
         del app
 

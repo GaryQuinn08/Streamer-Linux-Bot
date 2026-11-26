@@ -39,8 +39,8 @@ class PortTests(unittest.TestCase):
             window = None
             try:
                 window = MainWindow(rt, LogBridge())
-                home = window.centralWidget().widget(0)
-                overlays = window.centralWidget().widget(3)
+                home = window.connections_page
+                overlays = window.overlays_page
                 self.assertIsNone(rt.port)
                 self.assertEqual(home.overlay_port.text(), "")
                 self.assertIn(f"El puerto {occupied} está ocupado", home.server_label.text())

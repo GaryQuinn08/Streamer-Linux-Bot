@@ -50,7 +50,9 @@ class OAuthTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(args["redirect_uri"], params["redirect_uri"][0])
         self.assertNotIn("client_secret", params)
         self.assertEqual(args.get("client_secret", ""), client.secret)
-        self.assertEqual(urlsplit(endpoint).hostname, "id.twitch.tv" if client.platform == "twitch" else "oauth2.googleapis.com")
+        expected_endpoint = {"twitch": "id.twitch.tv", "youtube": "oauth2.googleapis.com",
+                             "spotify": "accounts.spotify.com"}[client.platform]
+        self.assertEqual(urlsplit(endpoint).hostname, expected_endpoint)
 
     async def test_twitch_browser_callback(self):
         with patch.object(oauth, "TWITCH_PORT", 0):
@@ -59,6 +61,23 @@ class OAuthTests(unittest.IsolatedAsyncioTestCase):
     async def test_google_browser_callback(self):
         await self.check_provider(oauth.Client("youtube", "fixture.apps.googleusercontent.com", "client-fixture"),
                                   "accounts.google.com")
+
+    async def test_spotify_pkce_uses_only_playback_scope(self):
+        with patch.object(oauth, "SPOTIFY_PORT", 0):
+            await self.check_provider(oauth.Client("spotify", "spotifyfixture124"), "accounts.spotify.com")
+        self.assertEqual(oauth.SPOTIFY_SCOPE, "user-modify-playback-state")
+
+    async def test_provisioning_resolves_private_google_config_relative_to_profile(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=True):
+            profile = Path(tmp)
+            self.assertEqual(oauth.deployment_setting("twitch", profile), "")
+            (profile / "oauth-clients.json").write_text(json.dumps({
+               "twitch_client_id": "project123", "google_client_file": "private-gcp.json",
+               "spotify_client_id": "spotify123"}))
+            self.assertEqual(oauth.deployment_setting("youtube", profile), str(profile / "private-gcp.json"))
+            self.assertEqual(oauth.deployment_setting("spotify", profile), "spotify123")
+            with patch.dict(os.environ, {"SLB_TWITCH_CLIENT_ID": "environment123"}):
+                self.assertEqual(oauth.deployment_setting("twitch", profile), "environment123")
 
     async def test_failed_browser_does_not_exchange(self):
         exchange = AsyncMock()
@@ -126,8 +145,11 @@ class SocialUiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "client_settings.ini")
             settings = QSettings(path, QSettings.Format.IniFormat)
-            settings.setValue("browser_login/twitch", "twitchpublic123")
-            rt = Runtime(config=Config.defaults(), port=0)
+            cfg = Config.defaults()
+            cfg.path = Path(tmp) / "config.json"
+            (cfg.path.parent / "oauth-clients.json").write_text(json.dumps(
+                {"twitch_client_id": "twitchpublic123"}))
+            rt = Runtime(config=cfg, port=0)
             rt.start()
             panel = PlatformLoginPanel(rt, settings)
             panel.show()
@@ -135,6 +157,8 @@ class SocialUiTests(unittest.TestCase):
                 with patch.object(oauth, "TWITCH_PORT", 0):
                     with patch("slbot.ui.platform_login.QDesktopServices.openUrl", return_value=True) as launch:
                         button = panel.findChild(QPushButton, "signin-twitch")
+                        self.assertFalse(panel.findChild(QPushButton, "signin-youtube").isEnabled())
+                        self.assertTrue(button.isEnabled())
                         QTest.mouseClick(button, Qt.MouseButton.LeftButton)
                         deadline = time.monotonic() + 3
                         while not launch.called and time.monotonic() < deadline:

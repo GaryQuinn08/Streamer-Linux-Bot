@@ -8,7 +8,7 @@ sin imprimir las credenciales.
 ## TikTok LIVE: dos posibilidades
 
 - **TikTok directo**: ejecuta `bash instalar.sh --tiktok` en el clon.
-  En Inicio elige el conector directo e introduce el @usuario que ya esté
+  En Conexiones elige el conector directo e introduce el @usuario que ya esté
   en vivo. Recibe regalos terminados, seguidores y chat (incluye comandos
   que comienzan con `!`). Usa la biblioteca de terceros [TikTokLive](https://github.com/isaackogan/TikTokLive),
   sin solicitar contraseña; el servicio de firma externo puede limitar
@@ -23,46 +23,23 @@ sin imprimir las credenciales.
 
 ## Iniciar sesión desde la app
 
-En **Inicio → Twitch / YouTube**, pulsa **Iniciar sesión**. El bot abre el
-navegador predeterminado en el sitio oficial y, al autorizar, vuelve al
-bot automáticamente. No pegues tokens en la app. Las autorizaciones solo
-se guardan en memoria mientras dura la conexión. Si vence el token,
-vuelve a iniciar sesión. El bot recuerda únicamente el Client ID público
-de Twitch y la ruta local al archivo de cliente de Google, no su contenido.
-Para cambiar de cliente o proyecto, usa **Configurar…**.
+En **Conexiones → Twitch / YouTube**, pulsa **Conectar**. El navegador
+predeterminado abre la página oficial del proveedor y el bot recibe la
+autorización automáticamente. No introduzcas contraseñas, tokens ni
+datos de desarrollador en el bot.
 
-### Twitch: configuración por primera vez
+- **Twitch:** elige la cuenta dueña del canal. El bot detecta su ID y
+  escucha eventos de lectura (chat, seguidores, suscripciones, bits y
+  recompensas según las capacidades del canal).
+- **YouTube:** elige la cuenta o canal correcto. El bot busca el directo
+  activo más reciente que tenga chat. Recibe chat, Super Chat, Super
+  Stickers y nuevas membresías; no ejecuta acciones por el historial.
 
-1. En la [consola de Twitch Developers](https://dev.twitch.tv/console/apps)
-   registra una aplicación de tipo **Public** con la URL de redireccionamiento
-   exacta `http://localhost:17845/oauth/twitch`. No necesitas Client Secret.
-2. En la app pulsa **Iniciar sesión en Twitch**, introduce el **Client ID**
-   que te dio Twitch y autoriza con la cuenta dueña de tu canal. El bot
-   obtiene el ID de tu canal y se conecta a EventSub.
-3. Si el puerto 17845 está en uso, no cierres procesos ajenos: revisa si
-   otra copia está iniciando sesión. Este puerto es local y distinto al
-   del catálogo.
-
-Se solicitan permisos de lectura `user:read:chat`, `moderator:read:followers`,
-`channel:read:subscriptions`, `bits:read` y `channel:read:redemptions`.
-Algunos eventos no están disponibles para todos los canales.
-
-### YouTube: configuración por primera vez
-
-1. En Google Cloud habilita **YouTube Data API v3** y crea un
-   [cliente OAuth de tipo Aplicación de escritorio](https://console.cloud.google.com/auth/clients).
-   Configura la pantalla de consentimiento y, si el proyecto está en modo
-   Pruebas, agrega tu cuenta como usuario de prueba.
-2. Descarga el JSON del cliente, guárdalo en tu equipo (no en Git) y
-   selecciónalo en **Iniciar sesión en YouTube**.
-3. En Google elige la cuenta o canal que tiene el directo y autoriza el
-   acceso de lectura. El bot busca el directo activo más reciente que tenga
-   chat. No ejecuta acciones por chat histórico. Recibe chat, Super Chat,
-   Super Stickers y nuevas membresías.
-
-Para cuentas públicas necesitarías distribuir Client IDs de aplicaciones
-propias y, según los permisos y la plataforma, completar su verificación.
-Esta beta no incluye identificadores de proyectos de terceros.
+Si aparece **No habilitado en esta instalación**, al proyecto le falta
+aprovisionar un cliente OAuth para esa plataforma. Ese paso lo hace el
+mantenedor con la [guía de registro](OAUTH.md), no cada streamer. Si ya
+habías configurado el cliente con la beta anterior, el bot todavía puede
+usarlo. Los tokens solo existen en memoria; si vencen, vuelve a conectar.
 
 ### Servidor sin interfaz
 

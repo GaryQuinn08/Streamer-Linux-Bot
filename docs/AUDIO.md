@@ -6,17 +6,29 @@ En Linux Mint, Ubuntu o Debian:
 sudo apt install mpv espeak-ng
 ```
 
-- **Triggers → Regla rápida:** usa Elegir para seleccionar un archivo de
-  sonido que se reproduzca al llegar un regalo. Deja en blanco para omitirlo.
-- **Inicio → Música local:** agrega archivos de audio y usa **Detener y
-  vaciar** si quieres cancelar la reproducción y lo que queda en cola.
-  **Acciones → Encolar canción local** pone un archivo elegido por ti en
-  la cola. No consume URL, no busca canciones por nombre ni usa Spotify,
-  Apple Music, Amazon Music o YouTube Music.
+- **Regla de regalos:** usa Elegir para seleccionar un sonido que se
+  reproduzca al llegar un regalo. Deja en blanco si no quieres sonido.
+- **Música → Audio autorizado para el directo:** puedes agregar un
+  archivo local o una URL HTTPS pública y directa de tu proveedor.
+  Solo para audio que tu licencia permita emitir; una página de
+  reproducción o enlace a playlist no es un archivo de audio. Usa
+  **Detener y vaciar esta cola** para cancelar la reproducción y lo
+  pendiente. El operador agrega los enlaces; no se leen desde el chat.
 - **Acciones → Leer texto (TTS):** lee texto configurado o, si eliges
-  `{text}`, el contenido enviado por los espectadores. Para emitir texto
-  de terceros, pon filtros y tiempo de espera para evitar abuso. La salida
-  predeterminada usa espeak-ng en español.
+  `{text}`, contenido del público. Pon filtros y tiempo de espera
+  para evitar abuso. La voz predeterminada usa espeak-ng en español.
+
+## Spotify (opcional, solo escucha privada)
+
+**Música → Spotify** agrega canciones por enlace a la cola del reproductor
+Spotify activo. Requiere Premium y un cliente [habilitado por el
+proyecto](OAUTH.md). Conecta desde el navegador, abre Spotify en el
+dispositivo y empieza a reproducir algo para activarlo. Pega un link de
+una canción (no una lista) en el bot. La música **no** sale por el bot,
+no participa en acciones, regalos o chat y no debe capturarse ni
+retransmitirse en OBS o LIVE Studio. Consulta las
+[condiciones de reproducción de Spotify](https://developer.spotify.com/documentation/web-api/reference/add-to-queue).
+No hay conexión con Apple Music o YouTube Music en esta versión.
 
 ## Piper (opcional)
 

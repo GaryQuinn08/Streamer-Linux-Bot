@@ -6,6 +6,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import re
 import secrets
 from collections.abc import Awaitable, Callable
@@ -16,8 +17,13 @@ from urllib.parse import urlencode
 import aiohttp
 from aiohttp import web
 
+from ..paths import config_dir
+
 TWITCH_PORT = 17845
 TWITCH_REDIRECT = f"http://localhost:{TWITCH_PORT}/oauth/twitch"
+SPOTIFY_PORT = 17846
+SPOTIFY_REDIRECT = f"http://127.0.0.1:{SPOTIFY_PORT}/oauth/spotify"
+SPOTIFY_SCOPE = "user-modify-playback-state"
 TWITCH_SCOPES = "user:read:chat moderator:read:followers channel:read:subscriptions bits:read channel:read:redemptions"
 GOOGLE_SCOPE = "https://www.googleapis.com/auth/youtube.readonly"
 OpenBrowser = Callable[[str], Awaitable[bool]]
@@ -34,10 +40,46 @@ class Client:
     secret: str = field(repr=False, default="")
 
 
+def deployment_setting(platform: str, profile: Path | None = None) -> str:
+    """Valores aprovisionados por el proyecto, no pedidos durante el login."""
+    names = {"twitch": ("SLB_TWITCH_CLIENT_ID", "twitch_client_id"),
+             "youtube": ("SLB_GOOGLE_CLIENT_JSON", "google_client_file"),
+             "spotify": ("SLB_SPOTIFY_CLIENT_ID", "spotify_client_id")}
+    env, key = names[platform]
+    value = os.environ.get(env, "").strip()
+    if value:
+        try:
+            return str(Path(value).expanduser()) if platform == "youtube" else value
+        except RuntimeError:
+            return ""
+    path = (profile or config_dir()) / "oauth-clients.json"
+    try:
+        with path.open("rb") as f:
+            raw = f.read(16385)
+        if len(raw) > 16384:
+            return ""
+        cfg = json.loads(raw)
+        value = cfg.get(key, "") if isinstance(cfg, dict) else ""
+    except (OSError, ValueError, RecursionError):
+        return ""
+    if not isinstance(value, str) or not value.strip():
+        return ""
+    if platform == "youtube":
+        try:
+            return str(path.parent / Path(value.strip()).expanduser())
+        except RuntimeError:
+            return ""
+    return value.strip()
+
+
 async def browser_client(platform: str, setting: str) -> Client:
     if platform == "twitch":
         if not re.fullmatch(r"[a-zA-Z0-9]{10,100}", setting):
             raise SignInError("Escribe el Client ID de una aplicación pública de Twitch.")
+        return Client(platform, setting)
+    if platform == "spotify":
+        if not re.fullmatch(r"[a-zA-Z0-9]{10,100}", setting):
+            raise SignInError("La instalación no tiene un Client ID válido de Spotify.")
         return Client(platform, setting)
     if platform != "youtube":
         raise SignInError("No hay inicio de sesión para esta plataforma.")
@@ -67,13 +109,19 @@ def _challenge(verifier: str) -> str:
 
 async def sign_in(client: Client, open_browser: OpenBrowser) -> str:
     twitch = client.platform == "twitch"
-    provider = "Twitch" if twitch else "Google"
+    spotify = client.platform == "spotify"
+    provider = "Twitch" if twitch else "Spotify" if spotify else "Google"
     if twitch:
         auth_url, token_url = "https://id.twitch.tv/oauth2/authorize", "https://id.twitch.tv/oauth2/token"
         path, host, port, scope = "/oauth/twitch", "localhost", TWITCH_PORT, TWITCH_SCOPES
-    else:
+    elif spotify:
+        auth_url, token_url = "https://accounts.spotify.com/authorize", "https://accounts.spotify.com/api/token"
+        path, host, port, scope = "/oauth/spotify", "127.0.0.1", SPOTIFY_PORT, SPOTIFY_SCOPE
+    elif client.platform == "youtube":
         auth_url, token_url = "https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token"
         path, host, port, scope = "/oauth/google", "127.0.0.1", 0, GOOGLE_SCOPE
+    else:
+        raise SignInError("Proveedor de inicio de sesión no compatible.")
     state, verifier = secrets.token_urlsafe(32), secrets.token_urlsafe(48)
     callback = asyncio.get_running_loop().create_future()
     expected_host = ""
@@ -114,7 +162,7 @@ async def sign_in(client: Client, open_browser: OpenBrowser) -> str:
         params = {"client_id": client.client_id, "redirect_uri": redirect,
                   "response_type": "code", "scope": scope, "state": state,
                   "code_challenge": _challenge(verifier), "code_challenge_method": "S256"}
-        if not twitch:
+        if client.platform == "youtube":
             params["prompt"] = "select_account"
         if not await open_browser(f"{auth_url}?{urlencode(params)}"):
             raise SignInError("No se pudo abrir el navegador predeterminado.")
@@ -131,7 +179,7 @@ async def sign_in(client: Client, open_browser: OpenBrowser) -> str:
 
     payload = {"client_id": client.client_id, "code": code, "code_verifier": verifier,
                "redirect_uri": redirect, "grant_type": "authorization_code"}
-    if not twitch and client.secret:
+    if client.platform == "youtube" and client.secret:
         payload["client_secret"] = client.secret
     return await _exchange(token_url, payload, provider)
 
