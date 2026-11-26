@@ -32,6 +32,10 @@ _REMOTE_FORMATS = {
 }
 
 
+class VoiceError(RuntimeError):
+    """A fixed, user-facing diagnostic without chat text or subprocess output."""
+
+
 class HostedAudioError(ValueError):
     """Error de validación apto para mostrar sin exponer la URL."""
 
@@ -294,24 +298,63 @@ async def say(rt, value: str) -> None:
             await _say(rt, value)
 
 
+async def _voice_command(*argv: str, text: str | None = None, timeout: float = 10) -> bool:
+    try:
+        return await run_process(*argv, text=text, timeout=timeout) == 0
+    except (OSError, TimeoutError):
+        return False
+
+
+async def _play_voice(wav: Path) -> None:
+    commands = (
+        ("paplay", str(wav)), ("pw-play", str(wav)),
+        ("mpv", "--no-config", "--no-video", "--no-ytdl", "--", str(wav)),
+        ("ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", str(wav)),
+        ("aplay", str(wav)),
+    )
+    available = False
+    for name, *args in commands:
+        if exe := shutil.which(name):
+            available = True
+            if await _voice_command(exe, *args, timeout=35):
+                return
+    if not available:
+        raise VoiceError("La voz se generó, pero falta un reproductor de audio. En Mint, Ubuntu o Debian, "
+                         "vuelve a ejecutar el instalador con --voz.")
+    raise VoiceError("La voz se generó, pero no se pudo enviar a una salida de audio. "
+                     "Revisa la salida seleccionada en Sonido del sistema y pulsa «Probar voz» de nuevo.")
+
+
+def _has_voice_wav(path: Path) -> bool:
+    try:
+        return path.is_file() and path.stat().st_size > 44
+    except OSError:
+        return False
+
+
 async def _say(rt, value: str) -> None:
     text = value.strip()[:300]
     if not text:
         return
-    model = os.environ.get("SLB_PIPER_MODEL", "")
-    if model:
-        voice = Path(model).expanduser().resolve()
-        piper = os.environ.get("SLB_PIPER") or shutil.which("piper")
-        if piper and voice.is_file() and voice.with_suffix(".onnx.json").is_file():
-            with tempfile.TemporaryDirectory() as folder:
-                wav = Path(folder) / "voz.wav"
-                code = await run_process(piper, "-m", str(voice), "-f", str(wav),
-                                         text=text + "\n", timeout=30)
-                if code == 0 and wav.is_file():
-                    await play_sound(wav)
-                    return
-        rt.log("Piper no pudo generar la voz. Se intentará con espeak-ng.")
-    fallback = shutil.which("espeak-ng")
-    if fallback and await run_process(fallback, "-v", "es", "--stdin", text=text, timeout=30) == 0:
-        return
-    raise RuntimeError("No se encontró una voz funcional. Configura Piper o instala espeak-ng.")
+    with tempfile.TemporaryDirectory() as folder:
+        wav = Path(folder) / "voz.wav"
+        model = os.environ.get("SLB_PIPER_MODEL", "")
+        if model:
+            voice = Path(model).expanduser().resolve()
+            piper = os.environ.get("SLB_PIPER") or shutil.which("piper")
+            if (piper and voice.is_file() and voice.with_suffix(".onnx.json").is_file()
+                    and await _voice_command(piper, "-m", str(voice), "-f", str(wav),
+                                             text=text + "\n", timeout=15) and _has_voice_wav(wav)):
+                await _play_voice(wav)
+                return
+            wav.unlink(missing_ok=True)
+            rt.log("Piper no pudo generar la voz. Se intentará con eSpeak NG.")
+        fallback = shutil.which("espeak-ng")
+        if not fallback:
+            raise VoiceError("Falta la voz local eSpeak NG. En Mint, Ubuntu o Debian, "
+                             "vuelve a ejecutar el instalador con --voz.")
+        if (not await _voice_command(fallback, "-v", "es", "-w", str(wav), "--stdin", text=text)
+                or not _has_voice_wav(wav)):
+            raise VoiceError("eSpeak NG está instalado, pero no pudo generar la voz en español. "
+                             "Revisa la instalación de espeak-ng y sus datos de voz.")
+        await _play_voice(wav)

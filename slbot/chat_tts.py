@@ -9,7 +9,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .audio import say
+from .audio import VoiceError, say
 
 if TYPE_CHECKING:
     from .core.events import Event
@@ -182,9 +182,10 @@ class ChatTts:
                 if result is not None and not result.done():
                     result.set_exception(RuntimeError(_STOPPED))
                 raise
-            except Exception:
-                # Never log a viewer's text or the engine's command line.
-                message = "No se pudo reproducir la voz local. Revisa espeak-ng o la configuración de Piper."
+            except Exception as exc:
+                # Only the fixed diagnostics from the local speech path are safe to show.
+                message = (str(exc) if isinstance(exc, VoiceError) else
+                           "La prueba de voz no terminó. Revisa la salida de audio y vuelve a intentar.")
                 now = loop.time()
                 if now >= self._next_error:
                     self._next_error = now + _ERROR_INTERVAL

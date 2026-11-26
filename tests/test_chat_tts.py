@@ -126,7 +126,7 @@ class ChatTtsRuntimeTests(unittest.IsolatedAsyncioTestCase):
             voice.assert_awaited_once()
             self.assertFalse(self.rt.chat_tts.settings.enabled)
             voice.side_effect = RuntimeError("do not reveal private message or process details")
-            with self.assertRaisesRegex(RuntimeError, "voz local"):
+            with self.assertRaisesRegex(RuntimeError, "no terminó"):
                 await self.rt.preview_chat_tts()
             self.assertNotIn("do not reveal", " ".join(self.rt.log_history))
 
@@ -175,11 +175,69 @@ class ChatTtsRuntimeTests(unittest.IsolatedAsyncioTestCase):
 class LocalVoiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_espeak_uses_spanish_and_pipes_input(self):
         rt = SimpleNamespace(voice_lock=asyncio.Lock())
+        async def run(*args, **kwargs):
+            Path(args[4]).write_bytes(b"x" * 100)
+            return 0
+
         with patch.dict(os.environ, {"SLB_PIPER_MODEL": ""}), patch(
             "slbot.audio.shutil.which", return_value="/usr/bin/espeak-ng",
-        ), patch("slbot.audio.run_process", new_callable=AsyncMock, return_value=0) as run:
+        ), patch("slbot.audio.run_process", side_effect=run) as process, patch(
+            "slbot.audio._play_voice", new_callable=AsyncMock,
+        ) as play:
             await audio.say(rt, "¡Un mismo texto!")
-        run.assert_awaited_once_with("/usr/bin/espeak-ng", "-v", "es", "--stdin", text="¡Un mismo texto!", timeout=30)
+        (exe, voice_arg, language, output_arg, wav, stdin), kwargs = process.await_args
+        self.assertEqual((exe, voice_arg, language, output_arg, stdin),
+                         ("/usr/bin/espeak-ng", "-v", "es", "-w", "--stdin"))
+        self.assertEqual(kwargs, {"text": "¡Un mismo texto!", "timeout": 10})
+        play.assert_awaited_once_with(Path(wav))
+        self.assertFalse(Path(wav).exists())
+
+    async def test_missing_engine_is_distinct_from_synthesis_failure(self):
+        rt = SimpleNamespace()
+        with patch.dict(os.environ, {"SLB_PIPER_MODEL": ""}), patch(
+            "slbot.audio.shutil.which", return_value=None,
+        ):
+            with self.assertRaisesRegex(audio.VoiceError, "Falta la voz local"):
+                await audio.say(rt, "Hola")
+        with patch.dict(os.environ, {"SLB_PIPER_MODEL": ""}), patch(
+            "slbot.audio.shutil.which", return_value="/usr/bin/espeak-ng",
+        ), patch("slbot.audio.run_process", new_callable=AsyncMock, side_effect=OSError("private path")):
+            with self.assertRaisesRegex(audio.VoiceError, "no pudo generar la voz"):
+                await audio.say(rt, "Hola")
+
+    async def test_playback_distinguishes_missing_tools_from_audio_session_failure(self):
+        with patch("slbot.audio.shutil.which", return_value=None):
+            with self.assertRaisesRegex(audio.VoiceError, "falta un reproductor"):
+                await audio._play_voice(Path("/tmp/voice.wav"))
+        tools = {"paplay": "/bin/paplay", "pw-play": "/bin/pw-play"}
+        with patch("slbot.audio.shutil.which", side_effect=tools.get), patch(
+            "slbot.audio.run_process", new_callable=AsyncMock, side_effect=[1, 0, 1, 1],
+        ) as run:
+            await audio._play_voice(Path("/tmp/voice.wav"))
+            self.assertEqual([call.args[0] for call in run.await_args_list], list(tools.values()))
+            with self.assertRaisesRegex(audio.VoiceError, "salida de audio"):
+                await audio._play_voice(Path("/tmp/voice.wav"))
+
+    async def test_piper_process_failure_falls_back_to_espeak(self):
+        with tempfile.TemporaryDirectory() as folder:
+            model = Path(folder) / "voice.onnx"
+            model.touch()
+            model.with_suffix(".onnx.json").touch()
+            rt = SimpleNamespace(log=lambda _: None)
+            async def run(*args, **kwargs):
+                if args[0] == "piper-fixture":
+                    return 1
+                Path(args[4]).write_bytes(b"x" * 100)
+                return 0
+
+            with patch.dict(os.environ, {"SLB_PIPER_MODEL": str(model), "SLB_PIPER": "piper-fixture"}), patch(
+                "slbot.audio.shutil.which", return_value="/usr/bin/espeak-ng",
+            ), patch("slbot.audio.run_process", side_effect=run) as process, patch(
+                "slbot.audio._play_voice", new_callable=AsyncMock,
+            ) as play:
+                await audio.say(rt, "Hola")
+            self.assertEqual([call.args[0] for call in process.await_args_list], ["piper-fixture", "/usr/bin/espeak-ng"])
+            play.assert_awaited_once()
 
     async def test_cancelling_during_process_creation_recovers_and_stops_child(self):
         spawned, ready = asyncio.Event(), asyncio.Event()

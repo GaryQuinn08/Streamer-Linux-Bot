@@ -3,7 +3,7 @@
 En Linux Mint, Ubuntu o Debian:
 
 ```bash
-sudo apt install mpv espeak-ng
+sudo apt install mpv
 ```
 
 - **Regla de regalos:** usa Elegir para seleccionar un sonido que se
@@ -32,6 +32,16 @@ lectura automática. **Detener y vaciar cola** interrumpe la voz del lector y
 descarta lo pendiente, pero no impide que se lean los mensajes nuevos. Para
 dejar de leer, desmarca la lectura automática y guarda. La opción **Simular
 mensaje** sirve para la vista del chat, no dispara la voz automática.
+
+Si instalaste desde el repositorio o el ZIP, ejecuta `bash instalar.sh --voz`
+(en la carpeta del instalador) para instalar las dependencias de voz que falten.
+Puedes conservar tus opciones habituales, por ejemplo `--tiktok --voz`.
+También puedes instalarlas directamente en Mint, Ubuntu o Debian con
+`sudo apt install espeak-ng pulseaudio-utils` sin reinstalar el bot.
+El paquete .deb para Debian 13 ya declara la voz y un reproductor como dependencias;
+instálalo mediante APT para que los resuelva. Si la app informa que la voz se
+generó pero no se pudo enviar a una salida, revisa **Sonido** del sistema y
+asegúrate de que tu dispositivo pueda reproducir otro audio.
 
 Para emitir la voz, comprueba qué entrada de audio está capturando OBS o LIVE
 Studio. Desmarcar una plataforma en el overlay visual no silencia su lectura.

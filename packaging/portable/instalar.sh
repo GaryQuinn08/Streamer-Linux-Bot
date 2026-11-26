@@ -1,5 +1,5 @@
 #!/bin/sh
-# Instala solo para la cuenta actual. No ejecuta sudo ni instala paquetes APT.
+# La app se instala para esta cuenta; la voz del sistema requiere consentimiento aparte.
 set -eu
 umask 077
 if [ "$(id -u)" -eq 0 ]; then
@@ -9,12 +9,15 @@ fi
 headless=0
 tiktok=0
 kick=0
+voice=ask
 for arg in "$@"; do
     case "$arg" in
         --servidor) headless=1 ;;
         --kick) kick=1 ;;
         --tiktok) tiktok=1 ;;
-        *) echo "Uso: bash instalar.sh [--servidor] [--tiktok] [--kick]" >&2; exit 2 ;;
+        --voz) voice=yes ;;
+        --sin-voz) voice=no ;;
+        *) echo "Uso: bash instalar.sh [--servidor] [--tiktok] [--kick] [--voz | --sin-voz]" >&2; exit 2 ;;
     esac
 done
 source_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
@@ -107,6 +110,52 @@ if ! QT_QPA_PLATFORM=offscreen "$target/venv/bin/python" -c \
     'from PySide6.QtWidgets import QApplication; import aiohttp; app = QApplication([])'; then
     echo "Qt no pudo arrancar. En Debian, Ubuntu y Mint revisa libegl1, libgl1 y libxcb-cursor0." >&2
     exit 1
+fi
+
+# Quitar la necesidad de adivinar qué paquete falta, sin elevar el instalador
+# ni modificar el sistema a escondidas. Un fallo no reemplaza el acceso con
+# una instalación rota: la app funciona normalmente aun sin voz.
+voice_packages() {
+    if command -v apt-get >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
+        sudo apt-get install -- "$@"
+    else
+        echo "Instala con tu gestor de paquetes: $*." >&2
+        return 1
+    fi
+}
+check_voice() {
+    missing=
+    if ! command -v espeak-ng >/dev/null 2>&1; then missing=espeak-ng; fi
+    if ! command -v paplay >/dev/null 2>&1 &&
+       ! command -v pw-play >/dev/null 2>&1 &&
+       ! command -v mpv >/dev/null 2>&1 &&
+       ! command -v ffplay >/dev/null 2>&1 &&
+       ! command -v aplay >/dev/null 2>&1; then
+        missing="${missing:+$missing }pulseaudio-utils"
+    fi
+}
+check_voice
+if [ -n "$missing" ] && [ "$voice" != no ]; then
+    if [ "$voice" = ask ] && [ -t 0 ] && command -v apt-get >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
+        printf '\nPara «Leer chat en voz alta» faltan: %s.\n' "$missing"
+        printf '¿Quieres instalarlos ahora con APT? [s/N] '
+        if read -r answer; then
+            case "$answer" in [sS]|[sS][iI]|sí|Sí) voice=yes ;; esac
+        fi
+    fi
+    if [ "$voice" = yes ]; then
+        # The list contains only fixed package names defined in check_voice.
+        # shellcheck disable=SC2086
+        if ! voice_packages $missing; then
+            echo "La instalación de voz no se completó; el bot se instalará sin esa función disponible." >&2
+        fi
+        check_voice
+    fi
+fi
+if [ -n "$missing" ]; then
+    printf 'Lectura de chat: faltan %s. En Mint, Ubuntu o Debian, vuelve a ejecutar este instalador con --voz.\n' "$missing" >&2
+else
+    echo "Dependencias de voz detectadas. Comprueba el audio en Chat → Probar voz."
 fi
 
 # El acceso directo apunta a la instalación nueva solo cuando está lista.

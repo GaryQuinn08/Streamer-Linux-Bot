@@ -62,7 +62,10 @@ bash instalar.sh --tiktok
 
 Quita `--tiktok` si solo usarás el simulador o el puente TikFinity.
 El instalador descarga dependencias de PyPI en un entorno privado, crea un
-acceso en el menú y no necesita sudo. Si ya clonaste esa rama, actualiza
+acceso en el menú. Si falta la voz local, el instalador de escritorio ofrece
+instalarla con APT tras pedir permiso. Usa `--voz` para solicitarlo o
+`--sin-voz` para omitirlo. Ejecuta el instalador como tu usuario, no con sudo.
+Si ya clonaste esa rama, actualiza
 con `git pull --ff-only` y vuelve a ejecutar el instalador. El comando
 estable apunta a la instalación más reciente; no borra versiones anteriores.
 

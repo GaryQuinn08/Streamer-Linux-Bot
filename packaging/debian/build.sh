@@ -2,7 +2,7 @@
 # Build a pure-Python Debian 13 package; dependencies are resolved by APT.
 set -eu
 src=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
-version=0.2.0~beta15
+version=0.2.0~beta16
 target=${1:-"$src/dist"}
 mkdir -p "$target"
 stage=$(mktemp -d)
@@ -24,8 +24,8 @@ Architecture: all
 Section: video
 Priority: optional
 Maintainer: Streamer Linux Bot project <GaryQuinn08@users.noreply.github.com>
-Depends: python3 (>= 3.12), python3-pyside6.qtwidgets, python3-aiohttp, libxcb-cursor0, qt6-qpa-plugins, qt6-svg-plugins
-Recommends: qt6-wayland, pulseaudio-utils | pipewire-bin, espeak-ng, mpv
+Depends: python3 (>= 3.12), python3-pyside6.qtwidgets, python3-aiohttp, libxcb-cursor0, qt6-qpa-plugins, qt6-svg-plugins, espeak-ng, pulseaudio-utils | pipewire-bin | alsa-utils
+Recommends: qt6-wayland, mpv
 Homepage: https://github.com/GaryQuinn08/Streamer-Linux-Bot
 Description: Desktop stream automation with local overlays
  Native Qt desktop app for OBS overlays, configurable gift alerts,
