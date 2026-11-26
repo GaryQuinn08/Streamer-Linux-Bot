@@ -33,8 +33,6 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
-    QTreeWidget,
-    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -42,6 +40,7 @@ from PySide6.QtWidgets import (
 from ..connectors.simulator import SAMPLE_KINDS, sample_event
 from ..overlay_manager import OverlayInfo, create_alert, import_overlay, list_overlays, validate_overlay_values
 from ..runtime import Runtime
+from .rule_editor import RulesPanel
 
 SAMPLE_LABELS = {
     "gift": "Regalo (TikTok)",
@@ -59,6 +58,7 @@ class LogBridge(QObject):
     overlay_port_done = Signal(str)
     overlay_saved = Signal(str, str)
     overlays_catalog_changed = Signal()
+    rules_changed = Signal(str)
 
 
 # --------------------------------------------------------------------------
@@ -170,6 +170,24 @@ class HomeTab(QWidget):
         tiktok_form.addRow(tiktok_row)
         layout.addWidget(tiktok_group)
 
+        receiving = QGroupBox("Twitch / YouTube · experimental")
+        receiving_layout = QVBoxLayout(receiving)
+        details = QLabel("Configura las credenciales de tu cuenta en la terminal antes de abrir el bot. "
+                         "Consulta el README. El bot no guarda tokens ni envía mensajes de chat.")
+        details.setWordWrap(True)
+        receiving_layout.addWidget(details)
+        for platform in ("twitch", "youtube"):
+            row = QHBoxLayout()
+            connector = self.rt.connectors[platform]
+            connect = QPushButton(f"Conectar {platform.title()}")
+            disconnect = QPushButton(f"Desconectar {platform.title()}")
+            connect.clicked.connect(lambda _checked, c=connector: self.rt.submit(c.start()))
+            disconnect.clicked.connect(lambda _checked, c=connector: self.rt.submit(c.stop()))
+            row.addWidget(connect)
+            row.addWidget(disconnect)
+            receiving_layout.addLayout(row)
+        layout.addWidget(receiving)
+
         layout.addWidget(QLabel("<b>Enviar un evento de prueba</b> (pasa por los triggers y los overlays)"))
         tests = QHBoxLayout()
         for kind in SAMPLE_KINDS:
@@ -178,6 +196,20 @@ class HomeTab(QWidget):
             tests.addWidget(button)
         tests.addStretch(1)
         layout.addLayout(tests)
+        audio = QGroupBox("Música local (mpv)")
+        audio_form = QFormLayout(audio)
+        self.music_label = QLabel()
+        self.music_label.setTextFormat(Qt.PlainText)
+        audio_form.addRow(self.music_label)
+        music_row = QHBoxLayout()
+        add_track = QPushButton("Encolar archivo…")
+        add_track.clicked.connect(self._enqueue_track)
+        clear_tracks = QPushButton("Detener y vaciar")
+        clear_tracks.clicked.connect(lambda: self.rt.submit(self.rt.music.clear()))
+        music_row.addWidget(add_track)
+        music_row.addWidget(clear_tracks)
+        audio_form.addRow(music_row)
+        layout.addWidget(audio)
         layout.addStretch(1)
 
         self.refresh()
@@ -208,7 +240,7 @@ class HomeTab(QWidget):
         if error:
             self.port_result.setText(error)
         else:
-            self.port_result.setText("Puerto guardado. Si cambió, vuelve a copiar la URL en OBS.")
+            self.port_result.setText("Puerto guardado. Si cambió, vuelve a copiar la URL en el programa de transmisión.")
         self.refresh()
 
     def _open_overlay_catalog(self) -> None:
@@ -230,6 +262,20 @@ class HomeTab(QWidget):
             self.tiktok_mode.currentData(), self.tiktok_channel.text()
         ))
 
+    def _enqueue_track(self) -> None:
+        name, _ = QFileDialog.getOpenFileName(self, "Elige música local", str(Path.home()),
+            "Audio (*.wav *.mp3 *.ogg *.opus *.flac *.m4a *.aac)")
+        if not name:
+            return
+
+        async def enqueue():
+            try:
+                self.rt.music.enqueue(name)
+            except (ValueError, RuntimeError) as exc:
+                self.rt.log(f"Música: {exc}")
+
+        self.rt.submit(enqueue())
+
     def _send_sample(self, kind: str) -> None:
         self.rt.emit(sample_event(kind))
 
@@ -238,6 +284,8 @@ class HomeTab(QWidget):
         self.server_label.setText(f"Servidor de overlays: http://127.0.0.1:{port}/" if port is not None
                                   else self.rt.overlay_port_message or "Asigna un puerto para activar los overlays.")
         self.open_catalog.setEnabled(port is not None)
+        self.music_label.setText("En reproducción: " + self.rt.music.current
+                                 if self.rt.music.current else "Sin reproducción activa.")
         self.connect_obs.setEnabled(self.rt.obs.status != "conectando…")
         connectors = list(self.rt.connectors.values())
         if self.table.rowCount() != len(connectors):
@@ -248,7 +296,7 @@ class HomeTab(QWidget):
 
 
 # --------------------------------------------------------------------------
-# Pestañas Triggers y Acciones (solo lectura por ahora)
+# Regla rápida de regalos
 # --------------------------------------------------------------------------
 
 class TriggersTab(QWidget):
@@ -302,7 +350,25 @@ class TriggersTab(QWidget):
         self.table.verticalHeader().setVisible(False)
         layout.addWidget(self.table)
         self.bridge.gift_save_done.connect(self._saved)
+        self.bridge.rules_changed.connect(self._reload_quick_rule)
         self._refresh()
+
+    def _reload_quick_rule(self, kind: str) -> None:
+        if kind == "quick":
+            self._refresh()
+            return
+        trigger = next((t for t in self.rt.config.triggers if t.id == "tiktok-gift"), None)
+        action = self.rt.config.action_by_id(trigger.action_id) if trigger else None
+        step = next((s for s in action.steps if s.get("type") == "overlay_alert"), {}) if action else {}
+        sound = next((s.get("file", "") for s in action.steps if s.get("id") == "quick-gift-sound"), "") if action else ""
+        self.enabled_rule.setChecked(trigger.enabled if trigger else True)
+        self.gift_name.setText(str(trigger.filters.get("gift_name", "")) if trigger else "")
+        self.cooldown.setValue(int(trigger.cooldown_s) if trigger else 0)
+        self.title.setText(str(step.get("title", "{user} envió {gift_name}")))
+        self.sound.setText(str(sound))
+        self._refresh_targets(str(step.get("overlay", "gift-alert")))
+        self._refresh()
+
 
     def _refresh(self) -> None:
         triggers = self.rt.config.triggers
@@ -354,38 +420,6 @@ class TriggersTab(QWidget):
         if not error:
             self._refresh()
 
-
-class ActionsTab(QWidget):
-    def __init__(self, runtime: Runtime, bridge: LogBridge) -> None:
-        super().__init__()
-        self.rt = runtime
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Acciones configuradas y sus pasos."))
-        self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Acción / paso", "Detalle"])
-        self.tree.header().setSectionResizeMode(QHeaderView.ResizeToContents)
-        layout.addWidget(self.tree)
-        bridge.gift_save_done.connect(self._saved)
-        self._refresh()
-
-    def _saved(self, error: str) -> None:
-        if not error:
-            self._refresh()
-
-    def _refresh(self) -> None:
-        self.tree.clear()
-        for action in self.rt.config.actions:
-            parent = QTreeWidgetItem([f"{action.name}  ({action.id})", ""])
-            self.tree.addTopLevelItem(parent)
-            for i, step in enumerate(action.steps, start=1):
-                detail = ", ".join(f"{k}={v}" for k, v in step.items() if k != "type")
-                parent.addChild(QTreeWidgetItem([f"{i}. {step.get('type', '?')}", detail]))
-        self.tree.expandAll()
-
-
-# --------------------------------------------------------------------------
-# Pestaña Overlays
-# --------------------------------------------------------------------------
 
 class _ColorButton(QPushButton):
     changed = Signal(str)
@@ -452,7 +486,7 @@ class OverlaysTab(QWidget):
         self.url = QLineEdit()
         self.url.setReadOnly(True)
         buttons = QHBoxLayout()
-        self.copy_btn = QPushButton("Copiar URL para OBS")
+        self.copy_btn = QPushButton("Copiar URL para OBS / LIVE Studio")
         self.copy_btn.clicked.connect(self._copy_url)
         self.open_btn = QPushButton("Abrir en el navegador")
         self.open_btn.clicked.connect(self._open_url)
@@ -734,7 +768,7 @@ class MainWindow(QMainWindow):
     def __init__(self, runtime: Runtime, bridge: LogBridge) -> None:
         super().__init__()
         self.rt = runtime
-        self.setWindowTitle("Streamer Linux Bot")
+        self.setWindowTitle("Streamer Linux Bot · Editor de perfil" if runtime.editor_only else "Streamer Linux Bot")
         self.resize(960, 640)
 
         self.log_view = QPlainTextEdit()
@@ -745,15 +779,25 @@ class MainWindow(QMainWindow):
         bridge.message.connect(self.log_view.appendPlainText)
 
         tabs = QTabWidget()
-        tabs.addTab(HomeTab(runtime, bridge), "Inicio")
+        if runtime.editor_only:
+            help_editor = QLabel("Editor de perfil: no abre puertos ni transmite. "
+                                 "Guarda los cambios y recarga el servidor desde terminal para aplicarlos.")
+            help_editor.setWordWrap(True)
+            help_editor.setMargin(18)
+            tabs.addTab(help_editor, "Inicio")
+        else:
+            tabs.addTab(HomeTab(runtime, bridge), "Inicio")
         tabs.addTab(TriggersTab(runtime, bridge), "Triggers")
-        tabs.addTab(ActionsTab(runtime, bridge), "Acciones")
+        tabs.addTab(RulesPanel(runtime, "action", bridge.rules_changed), "Acciones")
+        bridge.gift_save_done.connect(lambda error: bridge.rules_changed.emit("quick") if not error else None)
         tabs.addTab(OverlaysTab(runtime, bridge), "Overlays")
         tabs.addTab(self.log_view, "Registro")
         guide = QLabel(
             "<h2>Tu primera alerta</h2>"
             "<ol><li>En <b>Overlays</b>, selecciona <b>Alerta de regalos</b> y copia su URL.</li>"
             "<li>En OBS, añade una <b>Fuente de navegador</b>, pega la URL y deja la fuente visible.</li>"
+            "<li>En TikTok LIVE Studio, si está disponible, usa <b>Añadir fuente → Enlace</b>. "
+            "Si el bot está en otro equipo, sigue la guía del repositorio para crear un túnel privado.</li>"
             "<li>Vuelve a <b>Inicio</b> y pulsa <b>Regalo (TikTok)</b> para simular una Rosa ×3.</li>"
             "<li>En <b>Triggers</b> puedes cambiar el título, el filtro y el sonido de la alerta.</li></ol>"
             "<p>Si no aparece, revisa que el navegador de OBS tenga la URL correcta y vuelve a pulsar "
@@ -765,4 +809,5 @@ class MainWindow(QMainWindow):
         guide.setMargin(18)
         guide.setAlignment(Qt.AlignTop)
         tabs.addTab(guide, "Primeros pasos")
+        tabs.addTab(RulesPanel(runtime, "trigger", bridge.rules_changed), "Todos los triggers")
         self.setCentralWidget(tabs)

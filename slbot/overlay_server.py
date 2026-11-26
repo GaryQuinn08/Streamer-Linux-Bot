@@ -124,7 +124,7 @@ class OverlayServer:
             "background:#171b26;color:#f2f4fb}a{color:#9bd2ff}ul{padding:0;list-style:none}"
             "li{padding:1rem;background:#242b3c;border-radius:.5rem;margin:.6rem 0}"
             "li p{margin:.5rem 0 0;color:#c7cedf}</style>"
-            "<h1>Overlays y alertas</h1><p>Abre una alerta para obtener la URL de OBS. "
+            "<h1>Overlays y alertas</h1><p>Abre una alerta para obtener la URL de OBS o LIVE Studio. "
             "Para personalizar, crear o importar, usa la pestaña Overlays de la aplicación.</p>"
             f"<ul>{rows}</ul></html>"
         )

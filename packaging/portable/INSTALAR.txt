@@ -1,27 +1,20 @@
-Streamer Linux Bot 0.2.0 beta 2 · instalación en tu cuenta
-===============================================================
+Streamer Linux Bot, beta 3
 
-Usa esta variante si el .deb no encuentra python3-pyside6.qtwidgets.
-No depende de ese paquete APT ni modifica el Python del sistema.
-Necesitas Internet y Python 3.11 o superior.
+Requisitos: Linux, Python 3.11 o superior e Internet. En Mint, Debian o Ubuntu,
+si faltan dependencias del sistema:
 
-1. Extrae TODO el ZIP.
-2. En Debian, Ubuntu o Linux Mint, si te faltan las dependencias del sistema:
-   sudo apt install python3-venv libegl1 libgl1 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1 libxcb-xinerama0
-3. Abre la carpeta extraída en una terminal. Ejecuta SIN sudo:
-   bash instalar.sh
-4. Abre «Streamer Linux Bot (beta)» en el menú. Ve a «Primeros pasos».
+  sudo apt install python3-venv libegl1 libgl1 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1 libxcb-xinerama0
 
-La descarga inicial de Qt ocupa aproximadamente 90 MB. Los ajustes previos
-de Streamer Linux Bot se conservan. Si el puerto está ocupado, la ventana
-abre sin un puerto activo; asígnalo en Inicio. Esta variante no instala OBS ni TikTokLive.
+Extrae el ZIP entero (o clona el repositorio), abre una terminal en la carpeta
+y ejecuta sin sudo:
 
-Si falla, comparte la salida de:
-   cat /etc/os-release
-   python3 --version
-   uname -m
-y las últimas líneas del error.
+  bash instalar.sh
+  ~/.local/bin/streamer-linux-bot
 
-Para quitar esta variante, elimina el acceso de aplicaciones
-streamer-linux-bot-portable.desktop y la carpeta streamer-linux-bot-portable
-dentro de ~/.local/share (o de XDG_DATA_HOME si lo cambiaste).
+Opciones del instalador: --tiktok (conector directo de terceros),
+--servidor (sin Qt), --kick (verificación de webhooks de Kick).
+La instalación no modifica las alertas ni la configuración del perfil.
+
+Para música y voz básica instala mpv y espeak-ng con tu gestor de paquetes.
+Guías de LIVE Studio, SSH, Kick y Piper en el README del repositorio:
+https://github.com/GaryQuinn08/Streamer-Linux-Bot/tree/refactor/overlay-boundary

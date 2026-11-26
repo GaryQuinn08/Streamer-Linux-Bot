@@ -93,11 +93,11 @@ class ObsConnector(Connector):
         self._lock = asyncio.Lock()
 
     async def start(self, host: str | None = None, port: int | None = None,
-                    password: str | None = None) -> None:
+                    password: str | None = None, *, remember: bool = True) -> None:
         cfg = self.rt.config.settings["obs"]
         host = str(cfg["host"]) if host is None else host
         port = int(cfg["port"]) if port is None else port
-        manual = password is not None
+        manual = remember and password is not None
         password = str(cfg.get("password", "")) if password is None else password
 
         def connect(ReqClient):

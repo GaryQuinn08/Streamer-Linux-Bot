@@ -53,6 +53,8 @@ class Trigger:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Trigger":
+        if not isinstance(d, dict):
+            raise ValueError("Un trigger debe ser un objeto.")
         cooldown = float(d.get("cooldown_s", 0))
         if not math.isfinite(cooldown) or cooldown < 0:
             raise ValueError("Cooldown inválido")
@@ -90,6 +92,8 @@ class Action:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Action":
+        if not isinstance(d, dict):
+            raise ValueError("Una acción debe ser un objeto.")
         steps = d.get("steps", [])
         if not isinstance(steps, list) or any(not isinstance(step, dict) for step in steps):
             raise ValueError("Cada paso de una acción debe ser un objeto")
@@ -168,9 +172,11 @@ class Config:
         )
 
     @classmethod
-    def load(cls, path: Path | None = None) -> "Config":
+    def load(cls, path: Path | None = None, *, recover: bool = True) -> "Config":
         path = path or (config_dir() / "config.json")
         if not path.exists():
+            if not recover:
+                raise FileNotFoundError(path)
             cfg = cls.defaults()
             cfg.path = path
             cfg.save()
@@ -178,6 +184,8 @@ class Config:
         try:
             raw = json.loads(path.read_text("utf-8"))
         except (json.JSONDecodeError, OSError) as exc:
+            if not recover:
+                raise
             backup = path.with_suffix(".json.bak")
             shutil.copy2(path, backup)
             log.error("Configuración ilegible (%s). Copia en %s; se usan valores por defecto.", exc, backup)
@@ -186,10 +194,15 @@ class Config:
             return cfg
 
         if not isinstance(raw, dict):
+            if not recover:
+                raise ValueError("El perfil no es un objeto JSON.")
             log.error("La configuración no es un objeto JSON. Se usan los ajustes predeterminados.")
             cfg = cls.defaults()
             cfg.path = path
             return cfg
+        if not recover and (not isinstance(raw.get("triggers"), list)
+                            or not isinstance(raw.get("actions"), list)):
+            raise ValueError("El perfil necesita sus listas de triggers y acciones.")
         settings = raw.get("settings")
         cfg = cls(settings=_merge(DEFAULT_SETTINGS, settings if isinstance(settings, dict) else {}), path=path)
         if not isinstance(cfg.settings["obs"], dict):
@@ -206,12 +219,16 @@ class Config:
         for item in raw["triggers"] if isinstance(raw.get("triggers"), list) else []:
             try:
                 cfg.triggers.append(Trigger.from_dict(item))
-            except (KeyError, TypeError, ValueError):
+            except (KeyError, TypeError, ValueError) as exc:
+                if not recover:
+                    raise ValueError("El perfil contiene un trigger inválido.") from exc
                 log.warning("Trigger inválido omitido: %r", item)
         for item in raw["actions"] if isinstance(raw.get("actions"), list) else []:
             try:
                 cfg.actions.append(Action.from_dict(item))
-            except (KeyError, TypeError, ValueError):
+            except (KeyError, TypeError, ValueError) as exc:
+                if not recover:
+                    raise ValueError("El perfil contiene una acción inválida.") from exc
                 log.warning("Acción inválida omitida: %r", item)
         return cfg
 

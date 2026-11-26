@@ -4,68 +4,57 @@ Aplicación de escritorio para Linux que automatiza tu stream: recibe eventos
 (chat, seguidores, regalos, donaciones...), los pasa por **triggers** y ejecuta
 **acciones** (alertas en pantalla, cambios de escena en OBS, sonidos, TTS...).
 
-## Beta 2 de 0.2.0 para Linux
+## Beta 3 para Linux
 
-Esta primera beta está preparada para **Debian 13** (verificada en amd64).
-Tiene simulador sin cuenta, dos overlays para OBS, configuración de OBS desde
-la ventana, regla editable de regalos con sonido opcional, importación de
-overlays y tutorial. Twitch, YouTube, Kick, la cola de música y Piper siguen
-pendientes. Los conectores de TikTok son experimentales y no se requieren para
-probar la app. La compatibilidad con otras distribuciones aún no se valida.
+Instalación desde el repositorio sin ZIP ni dependencias de Qt de APT.
+Conserva el perfil de la beta anterior, incluido el catálogo y las alertas
+importadas. Cierra la app anterior antes de abrir la nueva.
 
-### Instalar
+### Linux Mint, Ubuntu o Debian
 
-Descarga el paquete y ejecuta el comando desde la carpeta que lo contiene:
+Si faltan paquetes del sistema:
 
 ```bash
-sudo apt install ./streamer-linux-bot_0.2.0~beta2_all.deb
+sudo apt install git python3-venv libegl1 libgl1 libxcb-cursor0 \
+  libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1 libxcb-xinerama0
 ```
 
-Abre **Streamer Linux Bot** desde el menú o con `streamer-linux-bot`. Para
-probar alertas necesitas OBS con **Fuente de navegador** disponible. Para
-controlar escenas y fuentes se usa el WebSocket de OBS Studio v5, configurado
-en **Inicio**; la contraseña se introduce en cada sesión y no se guarda. El
-paquete Debian usa el cliente WebSocket v5 ligero de la app (aiohttp);
-el entorno de desarrollo sigue admitiendo `obsws-python`.
-
-### Si APT no encuentra `python3-pyside6.qtwidgets`
-
-No agregues repositorios de otra distribución. Usa la variante ZIP, que
-instala PySide6 en un entorno de Python de tu cuenta. Se construye con
-`sh packaging/portable/build.sh` y se instala con `bash instalar.sh`
-después de extraerla. Consulta `INSTALAR.txt` dentro del ZIP para los
-requisitos del sistema. Se requiere Python 3.11 o superior e Internet.
-
-### Compilar o ejecutar desde el código
+Luego usa el código de la rama de prueba (esta versión aún no está en `main`):
 
 ```bash
-sh packaging/debian/build.sh                       # genera dist/*.deb
+git clone -b refactor/overlay-boundary https://github.com/GaryQuinn08/Streamer-Linux-Bot.git
+cd Streamer-Linux-Bot
+bash instalar.sh --tiktok
+~/.local/bin/streamer-linux-bot
+```
+
+Quita `--tiktok` si solo usarás el simulador o el puente TikFinity.
+El instalador descarga dependencias de PyPI en un entorno privado, crea un
+acceso en el menú y no necesita sudo. Si ya clonaste esa rama, actualiza
+con `git pull --ff-only` y vuelve a ejecutar el instalador. El comando
+estable apunta a la instalación más reciente; no borra versiones anteriores.
+
+### Servidor, LIVE Studio y conectores
+
+- [OBS, TikTok LIVE Studio y modo servidor por SSH](docs/TRANSMISION.md).
+- [TikTok / TikFinity, Twitch, YouTube y Kick](docs/CONECTORES.md).
+- [Sonido, cola local y Piper](docs/AUDIO.md).
+
+El control de escenas y fuentes usa el WebSocket v5 de **OBS Studio**.
+En **TikTok LIVE Studio** la integración es por una fuente **Enlace**, no
+control de escenas. El bot sigue siendo Linux: la PC donde corre LIVE Studio
+puede recibir las alertas del servidor Linux a través de un túnel privado.
+Falta probar esa ruta en LIVE Studio real y validar eventos de cuentas reales.
+
+### Empaquetado y desarrollo
+
+```bash
+sh packaging/debian/build.sh                       # genera dist/*.deb para Debian 13
+sh packaging/portable/build.sh                     # genera ZIP alternativo
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python run.py
 ```
-
-### TikTok LIVE experimental
-
-- **TikTok directo (Linux):** requiere instalar el conector de terceros
-  [TikTokLive](https://github.com/isaackogan/TikTokLive) en la carpeta de
-  dependencias del usuario. No se instala automáticamente, no pide tu
-  contraseña y el servicio de firma de terceros puede limitar o interrumpir
-  la conexión. En Debian, si decides probarlo:
-
-  ```bash
-  sudo apt install python3-venv
-  python3 -m venv ~/.local/share/streamer-linux-bot/tiktok-tools
-  ~/.local/share/streamer-linux-bot/tiktok-tools/bin/pip install \
-    --target "${XDG_DATA_HOME:-$HOME/.local/share}/streamer-linux-bot/tiktok-deps" TikTokLive
-  ```
-
-  Reinicia Streamer Linux Bot, elige **TikTok directo** y escribe el @usuario
-  que está en directo. La beta procesa chat, seguidores y regalos.
-- **TikFinity (Event API local):** usa `ws://127.0.0.1:21213/`. La
-  [app oficial de TikFinity](https://tikfinity.com/) ofrece esa API en Windows;
-  en Linux, esta opción requiere que ya tengas un puente que exponga la API
-  en ese puerto local. La beta no instala el puente.
 
 ## Probar que todo funciona
 
@@ -74,7 +63,8 @@ python3 -m venv .venv
    ejecuta la acción "Alerta de regalo". Verás las líneas en **Registro**.
 3. Ve a **Overlays**, elige "Alerta de regalos", pulsa **Abrir en el navegador**
    y vuelve a pulsar un evento de prueba: la tarjeta animada aparece en la página.
-4. En OBS: Fuentes → + → Navegador → pega la URL (botón **Copiar URL para OBS**).
+4. En **Overlays**, copia la URL de una alerta. En OBS usa **Fuentes → + → Navegador**.
+   En LIVE Studio prueba **Añadir fuente → Enlace** si tu cuenta tiene esa opción.
 
 Pruebas automáticas:
 
@@ -109,6 +99,15 @@ Una acción "overlay_alert" envía una alerta solo al overlay seleccionado.
   Solo se guarda cuando el servidor consigue escucharlo. Si cambias un
   puerto activo, actualiza su URL en OBS una sola vez.
 
+## Automatización sin editar JSON
+
+En **Acciones**, crea una secuencia: mostrar alerta, cambiar escena de OBS,
+reproducir sonido, leer texto, etc. Puedes reordenar pasos y probar la
+acción seleccionada con un regalo simulado (los cambios de OBS y audio son
+reales si están configurados). En **Todos los triggers**, elige qué
+plataforma y evento lanzan esa acción, con filtros y tiempo de espera.
+Para lo común, **Triggers** mantiene la regla rápida de regalo de TikTok.
+
 ## Configuración
 
 `~/.config/streamer-linux-bot/config.json` (se crea al primer arranque).
@@ -133,7 +132,7 @@ Filtros disponibles: `min_value`, `gift_name`, `user`, `contains` (texto del
 mensaje), `command`.
 
 Pasos de acción disponibles: `log`, `wait`, `overlay_alert`, `obs_scene`,
-`obs_source_visible`, `play_sound`, `tts`, `music_queue_add` (pendiente),
+`obs_source_visible`, `play_sound`, `tts`, `music_queue_add` (archivos locales),
 `chat_message` (pendiente). En los textos puedes usar `{user}`, `{platform}`,
 `{type}` y los campos del evento (`{gift_name}`, `{count}`, `{amount}`...).
 

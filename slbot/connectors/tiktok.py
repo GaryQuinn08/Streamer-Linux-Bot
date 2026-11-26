@@ -12,6 +12,7 @@ import aiohttp
 from ..core.events import Event
 from ..paths import data_dir
 from .base import Connector
+from .platforms import chat_events
 
 SUPPORTED = {"chat", "follow", "share", "like", "gift", "subscribe"}
 
@@ -99,9 +100,9 @@ class TiktokConnector(Connector):
             self.rt.log("TikTok: terminó la conexión. Pulsa Conectar para volver a intentarlo.")
         except asyncio.CancelledError:
             raise
-        except ModuleNotFoundError as exc:
+        except ImportError as exc:
             self.status = "faltan dependencias"
-            self.rt.log(f"TikTok directo: falta {exc.name}. Consulta el README para instalar el conector opcional.")
+            self.rt.log("TikTok directo: revisa las dependencias del conector; reinstala con --tiktok.")
         except Exception as exc:
             self.status = "error"
             self.rt.log(f"TikTok ({mode}): conexión no disponible ({type(exc).__name__}). "
@@ -117,7 +118,11 @@ class TiktokConnector(Connector):
             self._seen[key] = None
             if len(self._seen) > 2048:
                 self._seen.popitem(last=False)
-        await self.rt.bus.publish(event)
+        if event.type == "chat":
+            for message in chat_events("tiktok", event.user, event.data["text"]):
+                await self.rt.bus.publish(message)
+        else:
+            await self.rt.bus.publish(event)
 
     async def _tikfinity(self, url: str = "ws://127.0.0.1:21213/") -> None:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8)) as session:
@@ -172,8 +177,12 @@ class TiktokConnector(Connector):
                 task = await client.start()
             await task
         finally:
-            if getattr(client, "connected", False):
-                await client.disconnect()
+            try:
+                async with asyncio.timeout(3):
+                    if client.connected:
+                        await client.disconnect()
+            finally:
+                await client.close()
 
     async def stop(self) -> None:
         if self._task is not None:

@@ -9,10 +9,10 @@ import sys
 from zipfile import ZipFile, ZIP_DEFLATED
 
 src, dest = map(Path, sys.argv[1:])
-prefix = "Streamer-Linux-Bot-0.2.0-beta2-portable/"
-path = dest / "Streamer-Linux-Bot-0.2.0-beta2-portable.zip"
+prefix = "Streamer-Linux-Bot-0.2.0-beta3-portable/"
+path = dest / "Streamer-Linux-Bot-0.2.0-beta3-portable.zip"
 with ZipFile(path, "w", ZIP_DEFLATED) as zip:
-    for name in ("instalar.sh", "launcher", "requirements.txt", "INSTALAR.txt"):
+    for name in ("instalar.sh", "launcher", "requirements.txt", "requirements-server.txt", "requirements-tiktok.txt", "requirements-kick.txt", "INSTALAR.txt"):
         zip.write(src / "packaging/portable" / name, prefix + name)
     zip.write(src / "packaging/debian/streamer-linux-bot.svg", prefix + "streamer-linux-bot.svg")
     for file in sorted((src / "slbot").rglob("*")):

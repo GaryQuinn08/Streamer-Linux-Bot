@@ -17,12 +17,15 @@ import time
 from collections import deque
 from typing import Any, Callable, Coroutine
 
+from .audio import MusicQueue
 from .connectors.base import Connector
 from .connectors.obs import ObsConnector
-from .connectors.platforms import KickConnector, TwitchConnector, YoutubeConnector
+from .connectors.kick import KickConnector
+from .connectors.platforms import TwitchConnector, YoutubeConnector
 from .connectors.tiktok import TiktokConnector
 from .core.config import Config, DEFAULT_ACTIONS, DEFAULT_TRIGGERS, Action, Trigger
 from .core.engine import Engine
+from .core.editing import update_rules
 from .core.events import Event, EventBus
 from .overlay_manager import find_overlay, validate_overlay_values
 from .overlay_server import OverlayServer
@@ -36,10 +39,12 @@ class Runtime:
         on_log: Callable[[str], None] | None = None,
         config: Config | None = None,
         port: int | None = None,
+        editor_only: bool = False,
     ) -> None:
         self.config = config or Config.load()
         self._on_log = on_log or (lambda _msg: None)
         self._port_override = port
+        self.editor_only = editor_only
         self.log_history: deque[str] = deque(maxlen=500)
 
         self.loop: asyncio.AbstractEventLoop | None = None
@@ -50,6 +55,7 @@ class Runtime:
 
         self.bus = EventBus()
         self.engine = Engine(self)
+        self.music = MusicQueue(self)
         self.overlays = OverlayServer(self)
         self.overlay_port_message = ""
         self._overlay_lock = asyncio.Lock()
@@ -77,11 +83,12 @@ class Runtime:
         except Exception:
             log.exception("Fallo en el callback de registro")
 
-    def spawn(self, coro: Coroutine[Any, Any, Any]) -> None:
+    def spawn(self, coro: Coroutine[Any, Any, Any]) -> asyncio.Task:
         """Lanza una tarea en segundo plano (solo desde el hilo del bucle)."""
         task = asyncio.ensure_future(coro)
         self._background.add(task)
         task.add_done_callback(self._background.discard)
+        return task
 
     def submit(self, coro: Coroutine[Any, Any, Any]):
         """Ejecuta una corrutina en el bucle desde cualquier hilo."""
@@ -91,6 +98,9 @@ class Runtime:
 
     def emit(self, ev: Event) -> None:
         self.submit(self.bus.publish(ev))
+
+    async def edit_rule(self, kind: str, data: dict, *, delete: bool = False) -> None:
+        update_rules(self.config, kind, data, delete=delete)
 
     async def save_gift_rule(self, enabled: bool, gift_name: str, cooldown: int,
                              title: str, sound: str = "", overlay_id: str = "gift-alert") -> None:
@@ -221,6 +231,9 @@ class Runtime:
         loop.close()
 
     async def _startup(self) -> None:
+        if self.editor_only:
+            self.overlay_port_message = "Editor de perfil: no abre puertos ni transmite."
+            return
         self.bus.subscribe(self.engine.on_event)
         self.bus.subscribe(self._forward_overlay_event)
         port = self._port_override if self._port_override is not None else self.config.settings.get("overlay_port")

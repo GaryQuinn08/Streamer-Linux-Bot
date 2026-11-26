@@ -14,10 +14,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
+from ..audio import play_sound, say
 from .config import Action
 from .events import Event
 
@@ -65,7 +65,8 @@ async def run_action(rt: "Runtime", action: Action, ev: Event) -> None:
         if handler is None:
             rt.log(f"[{action.name}] paso {index}: tipo desconocido '{step_type}'")
             continue
-        params = {k: render(v, ctx) for k, v in step.items() if k != "type"}
+        literal = {"play_sound": {"file"}, "music_queue_add": {"query"}}.get(str(step_type), set())
+        params = {k: (v if k in literal else render(v, ctx)) for k, v in step.items() if k != "type"}
         try:
             await handler(rt, params, ev)
         except Exception as exc:  # un paso que falla no cancela los siguientes
@@ -114,52 +115,19 @@ async def _obs_source_visible(rt: "Runtime", p: dict[str, Any], ev: Event) -> No
     await rt.obs.set_source_visible(str(p["scene"]), str(p["source"]), bool(visible))
 
 
-async def _spawn_process(rt: "Runtime", *argv: str) -> None:
-    proc = await asyncio.create_subprocess_exec(
-        *argv, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
-    )
-    rt.spawn(proc.wait())  # recoger el proceso sin bloquear los pasos siguientes
-
-
 @subaction("play_sound")
 async def _play_sound(rt: "Runtime", p: dict[str, Any], ev: Event) -> None:
-    path = Path(str(p.get("file", "")))
-    if not path.is_file():
-        rt.log(f"play_sound: no existe el archivo {path}")
-        return
-    players: tuple[tuple[str, list[str]], ...] = (
-        ("paplay", []),
-        ("pw-play", []),
-        ("mpv", ["--no-video", "--really-quiet"]),
-        ("ffplay", ["-nodisp", "-autoexit", "-loglevel", "quiet"]),
-        ("aplay", []),
-    )
-    for name, extra in players:
-        exe = shutil.which(name)
-        if exe:
-            await _spawn_process(rt, exe, *extra, str(path))
-            return
-    rt.log("play_sound: no se encontró ningún reproductor (paplay, pw-play, mpv, ffplay, aplay)")
+    await play_sound(Path(str(p.get("file", ""))))
 
 
 @subaction("tts")
 async def _tts(rt: "Runtime", p: dict[str, Any], ev: Event) -> None:
-    # TODO: sustituir por Piper cuando se integre el TTS definitivo.
-    text = str(p.get("text", ""))[:300]
-    if not text:
-        return
-    for name in ("espeak-ng", "spd-say"):
-        exe = shutil.which(name)
-        if exe:
-            await _spawn_process(rt, exe, text)
-            return
-    rt.log("tts: instala espeak-ng (o configura Piper cuando esté integrado)")
+    await say(rt, str(p.get("text", "")))
 
 
 @subaction("music_queue_add")
 async def _music_queue_add(rt: "Runtime", p: dict[str, Any], ev: Event) -> None:
-    # TODO: pendiente de decidir qué reproductor controlará la app.
-    rt.log(f"music_queue_add (pendiente de implementar): {p.get('query', '')}")
+    rt.music.enqueue(str(p.get("query", "")))
 
 
 @subaction("chat_message")
