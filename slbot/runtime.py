@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Callable, Coroutine
 
 from .audio import MusicQueue
+from .dashboard import LiveDashboard
 from .chat_tts import CONFIG_KEY as CHAT_TTS_KEY, ChatTts, ChatTtsSettings
 from .connectors.base import Connector
 from .connectors.obs import ObsConnector
@@ -93,9 +94,11 @@ class Runtime:
         self._background: set[asyncio.Task[Any]] = set()
 
         self.bus = EventBus()
+        self.dashboard = LiveDashboard()
         self.engine = Engine(self)
         self.timers = TimerService(self)
         self._timer_task: asyncio.Task | None = None
+        self._obs_metrics_task: asyncio.Task | None = None
         self.music = MusicQueue(self)
         self.voice_lock = asyncio.Lock()
         self.chat_tts = ChatTts(self, ChatTtsSettings.from_config(self.config.settings))
@@ -418,6 +421,7 @@ class Runtime:
             self.overlay_port_message = "Editor de perfil: no abre puertos ni transmite."
             return
         self.bus.subscribe(self._track_chat)
+        self.bus.subscribe(self.dashboard.event)
         self.bus.subscribe(self.chat_tts.on_event)
         self.bus.subscribe(self.engine.on_event)
         self.bus.subscribe(self._forward_overlay_event)
@@ -436,11 +440,21 @@ class Runtime:
         if self.overlay_port_message:
             self.log(self.overlay_port_message)
         self._timer_task = asyncio.create_task(self.timers.run())
+        self._obs_metrics_task = asyncio.create_task(self._sample_obs_health())
         if self.config.settings["obs"].get("autoconnect"):
             self.spawn(self.obs.start())
 
+    async def _sample_obs_health(self) -> None:
+        while True:
+            await self.obs.dashboard_sample()
+            await asyncio.sleep(8)
+
     async def _shutdown(self) -> None:
         await self.chat_tts.close()
+        if self._obs_metrics_task is not None:
+            self._obs_metrics_task.cancel()
+            await asyncio.gather(self._obs_metrics_task, return_exceptions=True)
+            self._obs_metrics_task = None
         if self._timer_task is not None:
             self._timer_task.cancel()
             await asyncio.gather(self._timer_task, return_exceptions=True)

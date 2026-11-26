@@ -90,7 +90,7 @@ class WorkspaceTests(unittest.TestCase):
 
         window = MainWindow(self.rt, LogBridge())
         self.addCleanup(window.close)
-        self.assertIs(window.pages.currentWidget(), window.action_page)
+        self.assertIs(window.pages.currentWidget(), window.dashboard_page)
         window.findChild(QPushButton, "navigate-connections").click()
         self.assertIs(window.pages.currentWidget(), window.connections_page)
         view = window.connections_page

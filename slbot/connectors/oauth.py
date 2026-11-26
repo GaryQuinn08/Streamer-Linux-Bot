@@ -214,16 +214,24 @@ async def twitch_session_identity(session, token: str, client: str) -> tuple[str
     return owner, tuple(item for item in scopes if isinstance(item, str)) if isinstance(scopes, list) else ()
 
 
-async def youtube_live_chat(session, headers: dict[str, str]) -> str:
+async def youtube_active_broadcast(session, headers: dict[str, str]):
     async with session.get("https://www.googleapis.com/youtube/v3/liveBroadcasts",
                            params={"part": "snippet", "broadcastStatus": "active",
                                    "broadcastType": "all", "maxResults": "50"},
                            headers=headers, allow_redirects=False) as response:
         response.raise_for_status()
         data = await response.json()
-    chats = [(snippet.get("actualStartTime", ""), snippet["liveChatId"])
-             for row in data.get("items", []) if isinstance(snippet := row.get("snippet"), dict)
-             and isinstance(snippet.get("liveChatId"), str) and snippet["liveChatId"]]
-    if not chats:
+    if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+        raise ValueError("YouTube no devolvió una lista de directos válida.")
+    rows = [(str(snippet.get("actualStartTime", "")), str(row.get("id") or ""),
+             str(snippet.get("liveChatId") or ""), str(snippet.get("title") or ""))
+            for row in data.get("items", []) if isinstance(row, dict)
+            and isinstance(snippet := row.get("snippet"), dict)]
+    return max(rows, key=lambda row: (bool(row[2]), row[0])) if rows else None
+
+
+async def youtube_live_chat(session, headers: dict[str, str]) -> str:
+    stream = await youtube_active_broadcast(session, headers)
+    if not stream or not stream[2]:
         raise SignInError("Sesión autorizada, pero no hay un directo activo con chat en esa cuenta de YouTube.")
-    return max(chats)[1]
+    return stream[2]

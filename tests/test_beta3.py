@@ -129,15 +129,15 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             kick = rt.connectors["kick"]
             await kick.start(0, 123, path)
 
-            def packet(owner=123, time_delta=0):
-                raw = json.dumps({"broadcaster": {"user_id": owner}, "sender": {"username": "ana"},
-                                  "content": "hola"}).encode()
+            def packet(owner=123, time_delta=0, ident="signed001", kind="chat.message.sent", custom=None):
+                body = {"broadcaster": {"user_id": owner},
+                        **(custom or {"sender": {"username": "ana"}, "content": "hola"})}
+                raw = json.dumps(body).encode()
                 stamp = (datetime.now(timezone.utc) + timedelta(seconds=time_delta)).isoformat()
-                ident = "signed001"
                 signature = key.sign(f"{ident}.{stamp}.".encode() + raw, padding.PKCS1v15(), hashes.SHA256())
                 return raw, {"Kick-Event-Message-Id": ident, "Kick-Event-Message-Timestamp": stamp,
                              "Kick-Event-Signature": base64.b64encode(signature).decode(),
-                             "Kick-Event-Type": "chat.message.sent", "Kick-Event-Version": "1"}
+                             "Kick-Event-Type": kind, "Kick-Event-Version": "1"}
 
             try:
                 async with aiohttp.ClientSession() as session:
@@ -148,6 +148,20 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                             self.assertEqual(response.status, 204)
                     async with session.post(endpoint, data=raw + b" ", headers=headers) as response:
                         self.assertEqual(response.status, 401)
+                    kind = "livestream.status.updated"
+                    start = {"is_live": True, "title": "En vivo", "started_at": "2026-11-26T12:20:00Z"}
+                    raw, headers = packet(ident="stream001", kind=kind, custom=start)
+                    async with session.post(endpoint, data=raw, headers=headers) as response:
+                        self.assertEqual(response.status, 204)
+                    current = rt.dashboard.snapshot()["kick"]
+                    self.assertTrue(current.live)
+                    self.assertEqual(current.title, "En vivo")
+                    self.assertIsNone(current.viewers)
+                    raw, headers = packet(ident="stream002", kind=kind, custom={**start, "is_live": False,
+                                                                                "ended_at": "2026-11-26T13:10:00Z"})
+                    async with session.post(endpoint, data=raw, headers=headers) as response:
+                        self.assertEqual(response.status, 204)
+                    self.assertIs(rt.dashboard.snapshot()["kick"].live, False)
                     raw, headers = packet(124)
                     async with session.post(endpoint, data=raw, headers=headers) as response:
                         self.assertEqual(response.status, 403)

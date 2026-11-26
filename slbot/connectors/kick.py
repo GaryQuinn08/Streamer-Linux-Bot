@@ -16,6 +16,7 @@ from aiohttp import web
 from .base import Connector
 from .platforms import chat_events
 from ..core.events import Event
+from ..dashboard import timestamp as parse_stamp
 
 
 def kick_events(kind: str, body: dict) -> list[Event]:
@@ -66,6 +67,8 @@ class KickConnector(Connector):
         except BaseException:
             await runner.cleanup()
             raise
+        self.seen.clear()
+        self.rt.dashboard.reset_connection("kick")
         self.runner = runner
         self.port = runner.addresses[0][1]
         self.status = "escuchando (webhook firmado)"
@@ -77,6 +80,7 @@ class KickConnector(Connector):
             self.runner = None
         self.port = None
         self.status = "desconectado"
+        self.rt.dashboard.invalidate("kick")
 
     async def handle(self, request):
         from cryptography.exceptions import InvalidSignature
@@ -109,14 +113,26 @@ class KickConnector(Connector):
             raise web.HTTPForbidden()
         if h.get("Kick-Event-Version") != "1":
             return web.Response(status=204)
-        events = kick_events(h.get("Kick-Event-Type", ""), body)
+        kind = h.get("Kick-Event-Type", "")
+        events = kick_events(kind, body)
+        live = body.get("is_live") if kind == "livestream.status.updated" else None
+        start = parse_stamp(body.get("started_at"))
+        has_status = type(live) is bool and start is not None and (
+            live or parse_stamp(body.get("ended_at")) is not None)
         now = time.monotonic()
         while self.seen and next(iter(self.seen.values())) < now - 600:
             self.seen.popitem(last=False)
-        if ident not in self.seen and events:
+        if ident not in self.seen and (events or has_status):
             if len(self.seen) >= 100_000:
                 raise web.HTTPServiceUnavailable()
             self.seen[ident] = now
+            if has_status:
+                self.rt.dashboard.activity("kick")
+                self.rt.dashboard.signal(
+                    "kick", live, title=body.get("title", ""), started_at=start, session_id=body.get("started_at"),
+                    identity=body["broadcaster"].get("channel_slug"), order=sent.timestamp(), ttl=300,
+                    note="Último aviso oficial: " + ("inicio del directo." if live else "fin del directo.") +
+                         " Kick no envía espectadores por este webhook.")
             for event in events:
                 await self.rt.bus.publish(event)
         return web.Response(status=204)

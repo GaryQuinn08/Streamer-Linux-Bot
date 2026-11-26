@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import time
 from typing import Any
 from uuid import uuid4
 
@@ -147,7 +148,35 @@ class ObsConnector(Connector):
                 except OSError as exc:
                     self.rt.log(f"OBS está conectado, pero no se guardaron los ajustes: {exc}")
 
+    async def dashboard_sample(self) -> None:
+        # Read-only; use the same lock as other OBS requests.
+        async with self._lock:
+            client = self._client
+            if client is None:
+                return
+            try:
+                if isinstance(client, _DebianObsClient):
+                    sample = await client.call("GetStreamStatus")
+                    active, reconnecting = sample.get("outputActive"), sample.get("outputReconnecting")
+                    elapsed, dropped = sample.get("outputDuration"), sample.get("outputSkippedFrames")
+                else:
+                    sample = await asyncio.to_thread(client.get_stream_status)
+                    active, reconnecting = sample.output_active, sample.output_reconnecting
+                    elapsed, dropped = sample.output_duration, sample.output_skipped_frames
+                if type(active) is not bool:
+                    raise ValueError("Invalid OBS stream status")
+            except Exception:
+                self.rt.dashboard.invalidate("obs")
+                self.rt.dashboard.unavailable("obs", "OBS no respondió al último chequeo WebSocket.")
+                return
+            started_at = (time.time() - elapsed / 1000 if active and
+                          type(elapsed) is int and 0 < elapsed < 365 * 24 * 3600 * 1000 else None)
+            note = "OBS está intentando reconectar." if reconnecting else (
+                f"Cuadros perdidos en la salida: {dropped:,}." if active and type(dropped) is int else "")
+            self.rt.dashboard.signal("obs", active, started_at=started_at, note=note, ttl=18)
+
     async def _disconnect(self) -> None:
+        self.rt.dashboard.invalidate("obs")
         client, self._client = self._client, None
         if client is not None:
             try:

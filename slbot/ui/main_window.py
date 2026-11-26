@@ -78,7 +78,7 @@ class HomeTab(QWidget):
         self.rt = runtime
         self.bridge = bridge
         outer = QVBoxLayout(self)
-        scroll = QScrollArea()
+        scroll = self.scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         body = QWidget()
         layout = QVBoxLayout(body)
@@ -174,6 +174,12 @@ class HomeTab(QWidget):
         self.platform_login = PlatformLoginPanel(runtime)
         layout.addWidget(self.platform_login)
         layout.addWidget(tiktok_group)
+        from .kick_panel import KickPanel
+        self.kick_panel = KickPanel(runtime)
+        layout.addWidget(self.kick_panel)
+        self.connection_sections = {"twitch": self.platform_login.controls["twitch"][0],
+                                    "youtube": self.platform_login.controls["youtube"][0],
+                                    "tiktok": self.tiktok_channel, "kick": self.kick_panel.channel}
 
         sample_group = QGroupBox("Eventos de prueba")
         sample_layout = QVBoxLayout(sample_group)
@@ -205,6 +211,11 @@ class HomeTab(QWidget):
         timer = QTimer(self)
         timer.timeout.connect(self.refresh)
         timer.start(1000)
+
+    def show_platform(self, key):
+        if target := self.connection_sections.get(key):
+            self.scroll.ensureWidgetVisible(target, 8, 32)
+            target.setFocus()
 
     def _assign_overlay_port(self) -> None:
         if not self.assign_port.isEnabled():
@@ -255,7 +266,7 @@ class HomeTab(QWidget):
         direct = self.tiktok_mode.currentData() == "directo"
         self.tiktok_channel.setEnabled(direct)
         self.tiktok_hint.setText(
-            "Solo escribe tu @usuario cuando estés en vivo. No necesitas iniciar sesión ni instalar "
+            "Escribe tu @usuario. Si todavía no estás en directo, se volverá a comprobar. No necesitas iniciar sesión ni instalar "
             "TikFinity. Usa la biblioteca no oficial TikTokLive (instalación: --tiktok)."
             if direct else
             "Usa este modo solo si ya tienes TikFinity enviando eventos a su API local. "
@@ -271,6 +282,7 @@ class HomeTab(QWidget):
                                   else self.rt.overlay_port_message or "Asigna un puerto para activar los overlays.")
         self.open_catalog.setEnabled(port is not None)
         self.platform_login.refresh()
+        self.kick_panel.refresh()
         self.connect_obs.setEnabled(self.rt.obs.status != "conectando…")
         connectors = list(self.rt.connectors.values())
         if self.table.rowCount() != len(connectors):
@@ -1145,12 +1157,14 @@ class MainWindow(QMainWindow):
             self.connections_page.setMargin(12)
         else:
             from .monitor import SessionPanel
+            from .dashboard import DashboardPage
             from .music_panel import MusicPanel
 
             self.connections_page = HomeTab(runtime, bridge)
             self.music_page = MusicPanel(runtime)
             self.chat_page = SessionPanel(runtime, chat=True)
             self.history_page = SessionPanel(runtime, chat=False)
+            self.dashboard_page = DashboardPage(runtime, self.select_page, self._open_platform_connection)
 
         self.navigation = {}
 
@@ -1169,6 +1183,9 @@ class MainWindow(QMainWindow):
             side.addWidget(button)
             self.navigation[key] = (idx, title_text, help_text, button)
 
+        if not runtime.editor_only:
+            add_page("dashboard", "Inicio", "Estado de tus directos, métricas y accesos rápidos.",
+                     self.dashboard_page)
         add_group("AUTOMATIZACIÓN")
         add_page("actions", "Acciones", "Edita los disparadores y los pasos de una acción desde un solo lugar.", self.action_page)
         add_page("triggers", "Disparadores", "Consulta todos los eventos que activan tus acciones.", self.trigger_page)
@@ -1201,7 +1218,7 @@ class MainWindow(QMainWindow):
         guide.setAlignment(Qt.AlignmentFlag.AlignTop)
         add_page("guide", "Guía rápida", "Configura y prueba tu primera alerta.", guide)
         side.addStretch(1)
-        self.select_page("actions")
+        self.select_page("actions" if runtime.editor_only else "dashboard")
 
         self.footer = QLabel()
         self.footer.setObjectName("workbench-status")
@@ -1209,6 +1226,10 @@ class MainWindow(QMainWindow):
         self.statusBar().setSizeGripEnabled(True)
         bridge.overlay_port_done.connect(lambda _error: self._update_status())
         self._update_status()
+
+    def _open_platform_connection(self, key):
+        self.select_page("connections")
+        self.connections_page.show_platform(key)
 
     def _update_status(self):
         if self.rt.editor_only:

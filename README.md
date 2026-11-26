@@ -71,6 +71,16 @@ Si ya clonaste esa rama, actualiza
 con `git pull --ff-only` y vuelve a ejecutar el instalador. El comando
 estable apunta a la instalación más reciente; no borra versiones anteriores.
 
+### Inicio: estado y métricas de tus directos
+
+**Inicio** abre por defecto en la app de escritorio. Distingue un conector
+activo de una transmisión confirmada. Con las plataformas conectadas, detecta
+inicio y fin sin un interruptor manual. Muestra espectadores, pico observado,
+tiempo y datos del directo cuando la plataforma los entrega, interacciones
+recibidas, salud de OBS y del servidor de overlays, y accesos a Chat/TTS,
+Conexiones, Acciones, Overlays, Música y Registro.
+Consulta [qué datos hay por plataforma y cómo probarlo](docs/DASHBOARD.md).
+
 ### Servidor, LIVE Studio y conectores
 
 - [OBS, TikTok LIVE Studio y modo servidor por SSH](docs/TRANSMISION.md).

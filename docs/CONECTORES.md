@@ -63,14 +63,17 @@ y `SLB_TWITCH_TOKEN`. Para YouTube usa `--youtube` con `SLB_YOUTUBE_TOKEN`
 y `SLB_YOUTUBE_LIVE_CHAT_ID`. Introduce los tokens localmente; evita
 dejarlos en el historial de la terminal o en archivos del repositorio.
 
-## Kick (webhook firmado, solo servidor)
+## Kick (webhook firmado)
 
-1. Instala el extra: `bash instalar.sh --servidor --kick`.
+1. Instala el extra: `bash instalar.sh --kick` en escritorio (conserva tus demás opciones),
+   o `bash instalar.sh --servidor --kick` sin interfaz.
 2. Descarga la clave pública PEM **actual** desde el
    [endpoint oficial de Kick](https://api.kick.com/public/v1/public-key)
    y guarda solo la clave pública en un archivo `kick.pem`. Vuelve a
    descargarla y reinicia el bot si Kick la rota.
-3. Inicia `~/.local/bin/streamer-linux-bot-server servidor --kick-clave /ruta/kick.pem --kick-canal ID_NUMERICO`.
+3. En escritorio ve a **Conexiones → Kick**, escribe el ID de canal y la ruta
+   al PEM, y pulsa **Activar receptor**. En servidor, inicia
+   `~/.local/bin/streamer-linux-bot-server servidor --kick-clave /ruta/kick.pem --kick-canal ID_NUMERICO`.
    Abre exclusivamente `POST /webhooks/kick` mediante un proxy HTTPS con
    límites de solicitudes y tamaño; destino interno `127.0.0.1:8770`.
    No publiques el puerto del catálogo. El receptor verifica la firma,
@@ -80,6 +83,7 @@ dejarlos en el historial de la terminal o en archivos del repositorio.
    con el permiso `events:subscribe`. El bot **recibe** los webhooks;
    no gestiona OAuth ni registra suscripciones. Eventos soportados:
    `chat.message.sent`, `channel.followed`, `channel.subscription.new`,
-   `channel.subscription.renewal` y `kicks.gifted`.
+   `channel.subscription.renewal`, `kicks.gifted` y `livestream.status.updated`
+   (aviso de inicio/fin para Inicio; no dispara acciones).
 
 Esta versión solo recibe eventos; no publica mensajes por sí sola.

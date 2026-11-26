@@ -108,6 +108,7 @@ class WorkbenchRemovalTests(unittest.TestCase):
     def test_action_cancellation_and_last_step_removal_are_persistent(self):
         from PySide6.QtCore import Qt
         from PySide6.QtTest import QTest
+        self.win.select_page("actions")
         workbench = self.win.action_page
         workbench.action_table.selectRow(1)
         self.assertEqual(workbench.action.id, "alert-follow")

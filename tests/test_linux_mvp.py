@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from aiohttp import web
 
 from slbot.connectors.tiktok import TiktokConnector, normalize_live_gift, normalize_tikfinity
+from slbot.dashboard import LiveDashboard
 from slbot.core.config import Config
 from slbot.core.events import Event
 from test_smoke import RuntimeCase
@@ -70,6 +71,8 @@ class TiktokTests(unittest.IsolatedAsyncioTestCase):
         async def producer(request):
             ws = web.WebSocketResponse()
             await ws.prepare(request)
+            await ws.send_json({"event": "roomUser", "data": {"viewerCount": 31, "roomId": "123"}})
+            await ws.send_json({"event": "roomUser", "data": {"viewerCount": 9, "roomId": "123"}})
             await ws.send_json({"event": "gift", "data": {**packet["data"], "repeatEnd": False}})
             await ws.send_json(packet)
             await ws.send_json(packet)
@@ -83,12 +86,15 @@ class TiktokTests(unittest.IsolatedAsyncioTestCase):
         try:
             site = web.TCPSite(runner, "127.0.0.1", 0)
             await site.start()
-            connector = TiktokConnector(SimpleNamespace(bus=SimpleNamespace(publish=publish), log=lambda _: None))
+            connector = TiktokConnector(SimpleNamespace(bus=SimpleNamespace(publish=publish), log=lambda _: None,
+                                                       dashboard=LiveDashboard()))
             await connector._tikfinity(f"ws://127.0.0.1:{runner.addresses[0][1]}/")
         finally:
             await runner.cleanup()
+        metrics = connector.rt.dashboard.snapshot()["tiktok"]
+        self.assertEqual((metrics.live, metrics.viewers, metrics.peak), (True, 9, 31))
         self.assertEqual(len(delivered), 1)
-        self.assertEqual(delivered[0].data, {"gift_name": "Rose", "count": 3, "value": 3})
+        self.assertEqual(delivered[0].data, {"gift_name": "Rose", "count": 3, "value": 3, "diamonds": 3})
 
     async def test_direct_gift_normalizer_and_invalid_event(self):
         user = SimpleNamespace(nickname="demo")
@@ -131,6 +137,8 @@ class DebianObsTests(unittest.IsolatedAsyncioTestCase):
                 response = {
                     "GetVersion": {"obsVersion": "31.0.3"},
                     "GetSceneItemId": {"sceneItemId": 7},
+                    "GetStreamStatus": {"outputActive": True, "outputReconnecting": False,
+                                        "outputDuration": 120000, "outputSkippedFrames": 7},
                 }.get(name)
                 reply = {"requestType": name, "requestId": data["requestId"],
                          "requestStatus": {"result": True, "code": 100}}
@@ -151,14 +159,19 @@ class DebianObsTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(await client.connect(), "31.0.3")
                 from slbot.connectors.obs import ObsConnector
 
-                connector = ObsConnector(SimpleNamespace())
+                connector = ObsConnector(SimpleNamespace(dashboard=LiveDashboard()))
                 connector._client = client
+                await connector.dashboard_sample()
+                status = connector.rt.dashboard.snapshot()["obs"]
+                self.assertTrue(status.live)
+                self.assertIn("7", status.note)
                 await connector.set_scene("Demo")
                 await connector.set_source_visible("Demo", "Overlay", True)
             finally:
                 await client.disconnect()
             self.assertEqual(requests, [
                 ("GetVersion", None),
+                ("GetStreamStatus", None),
                 ("SetCurrentProgramScene", {"sceneName": "Demo"}),
                 ("GetSceneItemId", {"sceneName": "Demo", "sourceName": "Overlay"}),
                 ("SetSceneItemEnabled", {"sceneName": "Demo", "sceneItemId": 7, "sceneItemEnabled": True}),

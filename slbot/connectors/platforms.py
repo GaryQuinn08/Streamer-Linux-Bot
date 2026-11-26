@@ -12,9 +12,10 @@ from yarl import URL
 
 from .base import Connector
 from .oauth import (
-    TWITCH_WRITE_SCOPE, SignInError, browser_client, sign_in, twitch_session_identity, youtube_live_chat,
+    TWITCH_WRITE_SCOPE, SignInError, browser_client, sign_in, twitch_session_identity, youtube_active_broadcast,
 )
 from ..core.events import Event
+from ..dashboard import number, timestamp
 
 
 def chat_events(platform: str, user: str, text: str) -> list[Event]:
@@ -70,6 +71,8 @@ class _Receiver(Connector):
 
     async def start(self, *, browser=None, setting: str = "", twitch_write: bool = False):
         if self._task is None or self._task.done():
+            self._seen.clear()
+            self.rt.dashboard.reset_connection(self.name)
             self.status = "autoriza en el navegador…" if browser else "conectando…"
             self._task = asyncio.create_task(self._run(browser, setting, twitch_write and self.name == "twitch"))
 
@@ -104,6 +107,8 @@ class _Receiver(Connector):
         except Exception as exc:
             self.status = "error"
             self.rt.log(f"{self.name}: {type(exc).__name__}")
+        finally:
+            self.rt.dashboard.invalidate(self.name, keep_offline=True)
 
     async def stop(self):
         if self._task is not None:
@@ -111,6 +116,7 @@ class _Receiver(Connector):
             await asyncio.gather(self._task, return_exceptions=True)
             self._task = None
         self.status = "desconectado"
+        self.rt.dashboard.invalidate(self.name)
 
     async def publish(self, ident, events):
         if isinstance(ident, str) and ident:
@@ -129,6 +135,7 @@ class TwitchConnector(_Receiver):
     def __init__(self, rt):
         super().__init__(rt)
         self._writer = None
+        self.feed_detail = ""
         self._send_lock = asyncio.Lock()
 
     @property
@@ -193,10 +200,36 @@ class TwitchConnector(_Receiver):
                     self._writer = session, headers, logged_in
                 else:
                     self.rt.log("Twitch: la cuenta no concedió permiso para enviar mensajes.")
+            self.feed_detail = ""
+            metrics = asyncio.create_task(self._poll_dashboard(session, headers, owner or logged_in))
             try:
                 await self._events(session, token, client, owner or logged_in, headers)
             finally:
                 self._writer = None
+                metrics.cancel()
+                await asyncio.gather(metrics, return_exceptions=True)
+
+    async def _poll_dashboard(self, session, headers, owner):
+        while True:
+            try:
+                async with session.get("https://api.twitch.tv/helix/streams", headers=headers,
+                                       params={"user_id": owner}, allow_redirects=False) as response:
+                    if response.status != 200:
+                        raise ValueError("invalid Twitch response")
+                    body = await response.json()
+                rows = body["data"]
+                if not isinstance(rows, list):
+                    raise ValueError("invalid Twitch data")
+                if rows:
+                    stream = rows[0]
+                    self.rt.dashboard.signal("twitch", True, viewers=number(stream.get("viewer_count")),
+                                             title=stream.get("title") or "", identity=stream.get("user_login") or "",
+                                             started_at=timestamp(stream.get("started_at")), session_id=stream.get("id"), note="")
+                else:
+                    self.rt.dashboard.signal("twitch", False, title="", note="")
+            except (aiohttp.ClientError, asyncio.TimeoutError, KeyError, ValueError, TypeError, AttributeError):
+                self.rt.dashboard.unavailable("twitch", "Helix no respondió; el estado caducará si no se actualiza.")
+            await asyncio.sleep(60)
 
     async def _events(self, session, token, client, owner, headers):
         specs = (
@@ -228,7 +261,9 @@ class TwitchConnector(_Receiver):
                         self.rt.log(f"Twitch: {kind} no autorizado o no disponible ({response.status}).")
                     return response.status == 202
 
-            if not any(await asyncio.gather(*(subscribe(*spec) for spec in specs))):
+            accepted = sum(await asyncio.gather(*(subscribe(*spec) for spec in specs)))
+            self.feed_detail = f"EventSub: {accepted}/{len(specs)} tipos de eventos activos"
+            if not accepted:
                 raise ValueError("no se pudo suscribir a ningún evento; revisa los permisos del token.")
             self.status = "conectado (EventSub)"
             loop = asyncio.get_running_loop()
@@ -246,7 +281,11 @@ class TwitchConnector(_Receiver):
                     await self.publish(metadata.get("message_id"), twitch_events(
                         metadata.get("subscription_type", ""), payload.get("event", {})))
                 elif kind == "revocation":
+                    accepted = max(0, accepted - 1)
+                    self.feed_detail = f"EventSub: {accepted}/{len(specs)} tipos de eventos activos"
                     self.rt.log("Twitch revocó una suscripción; revisa los permisos en tu cuenta.")
+                    if not accepted:
+                        raise SignInError("Twitch revocó el acceso a los eventos; vuelve a autorizar.")
                 elif kind == "session_reconnect":
                     candidate = URL(payload["session"]["reconnect_url"])
                     if (candidate.scheme != "wss" or candidate.host != "eventsub.wss.twitch.tv"
@@ -270,20 +309,87 @@ class YoutubeConnector(_Receiver):
                 raise SignInError("Configura SLB_YOUTUBE_TOKEN y SLB_YOUTUBE_LIVE_CHAT_ID.")
         headers = {"Authorization": f"Bearer {token}"}
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=12)) as session:
-            chat = chat or await youtube_live_chat(session, headers)
-            params = {"part": "snippet,authorDetails", "liveChatId": chat, "maxResults": "200"}
-            initial = True
+            if chat:
+                await self._read_chat(session, headers, chat)
+                return
             while True:
+                broadcast = await youtube_active_broadcast(session, headers)
+                if not broadcast:
+                    self.status = "autorizado; esperando directo"
+                    self.rt.dashboard.signal("youtube", False, title="", note="")
+                    await asyncio.sleep(60)
+                    continue
+                started, video, chat, title = broadcast
+                self.rt.dashboard.signal("youtube", True, started_at=timestamp(started), title=title,
+                                         session_id=video or chat)
+                if not chat:
+                    self.status = "autorizado; el directo no tiene chat disponible"
+                    await self._video_metrics(session, headers, video, started, title)
+                    await asyncio.sleep(60)
+                    continue
+                await self._read_chat(session, headers, chat, video=video, started=started, title=title)
+                await asyncio.sleep(15)
+
+    async def _video_metrics(self, session, headers, video, started, title):
+        if not video:
+            return
+        try:
+            async with session.get("https://www.googleapis.com/youtube/v3/videos", headers=headers,
+                                   params={"part": "liveStreamingDetails", "id": video},
+                                   allow_redirects=False) as response:
+                if response.status != 200:
+                    raise ValueError("invalid YouTube response")
+                body = await response.json()
+            details = body["items"][0]["liveStreamingDetails"]
+            live = not bool(details.get("actualEndTime"))
+            self.rt.dashboard.signal("youtube", live,
+                                     viewers=number(details.get("concurrentViewers")), title=title,
+                                     started_at=timestamp(details.get("actualStartTime") or started),
+                                     session_id=video, note="")
+            return live
+        except (aiohttp.ClientError, asyncio.TimeoutError, KeyError, IndexError, ValueError, TypeError, AttributeError):
+            self.rt.dashboard.unavailable("youtube", "No se pudieron consultar los espectadores de YouTube.",
+                                          clear_viewers=True)
+
+    async def _read_chat(self, session, headers, chat, *, video="", started="", title=""):
+        params = {"part": "snippet,authorDetails", "liveChatId": chat, "maxResults": "200"}
+        initial = True
+        metric_due = 0
+        loop = asyncio.get_running_loop()
+        while True:
+            try:
                 async with session.get("https://www.googleapis.com/youtube/v3/liveChat/messages",
                                        headers=headers, params=params, allow_redirects=False) as response:
+                    if response.status in (403, 404):
+                        error = await response.json()
+                        reasons = {row.get("reason") for row in error.get("error", {}).get("errors", ())}
+                        if "liveChatEnded" in reasons:
+                            self.rt.dashboard.signal("youtube", False, title="", note="")
+                            self.status = "autorizado; esperando directo"
+                            return
                     response.raise_for_status()
                     body = await response.json()
-                self.status = "conectado (chat en vivo)"
-                for item in body.get("items", ()):
-                    await self.publish(item.get("id"), [] if initial else youtube_events(item))
-                initial = False
-                if body.get("offlineAt") or not body.get("nextPageToken"):
-                    self.rt.log("YouTube: terminó el chat del directo.")
+            except (KeyError, TypeError, AttributeError):
+                raise ValueError("YouTube envió datos de chat no válidos.") from None
+            if body.get("offlineAt"):
+                self.rt.dashboard.signal("youtube", False, title="", note="")
+                self.rt.log("YouTube: terminó el chat del directo.")
+                self.status = "autorizado; esperando directo"
+                return
+            self.status = "conectado (chat en vivo)"
+            self.rt.dashboard.signal("youtube", True, title=title, started_at=timestamp(started),
+                                     session_id=video or chat, keep_viewers=True)
+            for item in body.get("items", ()):
+                await self.publish(item.get("id"), [] if initial else youtube_events(item))
+            initial = False
+            if video and loop.time() >= metric_due:
+                if await self._video_metrics(session, headers, video, started, title) is False:
+                    self.status = "autorizado; esperando directo"
                     return
-                params["pageToken"] = body["nextPageToken"]
-                await asyncio.sleep(max(1.0, int(body.get("pollingIntervalMillis", 5000)) / 1000))
+                metric_due = loop.time() + 60
+            if not body.get("nextPageToken"):
+                self.rt.dashboard.invalidate("youtube")
+                self.rt.log("YouTube: no se recibió otra página de chat; se volverá a consultar la transmisión.")
+                return
+            params["pageToken"] = body["nextPageToken"]
+            await asyncio.sleep(max(1.0, int(body.get("pollingIntervalMillis", 5000)) / 1000))
