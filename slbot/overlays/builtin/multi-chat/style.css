@@ -79,3 +79,18 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .message { animation: none; }
 }
+
+.platform[hidden] { display: none; }
+
+.message.fading {
+  animation: disappear .32s ease-out forwards;
+}
+
+@keyframes disappear {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message.fading { animation: none; opacity: 0; }
+}

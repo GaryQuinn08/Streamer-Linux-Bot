@@ -2,7 +2,7 @@
   "id": "multi-chat",
   "name": "Chat multiplataforma",
   "description": "Muestra los nuevos mensajes de Twitch, YouTube, Kick y TikTok en una sola fuente para OBS o TikTok LIVE Studio. Configura qué plataformas se ven. No envía mensajes ni repite el historial.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Streamer Linux Bot",
   "params": [
     { "key": "twitch", "label": "Mostrar Twitch", "type": "bool", "default": true },
@@ -12,7 +12,7 @@
     { "key": "badges", "label": "Mostrar etiquetas de plataforma", "type": "bool", "default": true },
     { "key": "max", "label": "Máximo de mensajes visibles", "type": "number", "default": 8, "min": 1, "max": 24 },
     { "key": "size", "label": "Tamaño del texto (px)", "type": "number", "default": 22, "min": 12, "max": 60 },
-    { "key": "duration", "label": "Segundos por mensaje (0 = sin límite)", "type": "number", "default": 0, "min": 0, "max": 300 },
+    { "key": "duration", "label": "Segundos por mensaje (0 = sin límite)", "type": "number", "default": 15, "min": 0, "max": 300 },
     { "key": "opacity", "label": "Opacidad del fondo (%)", "type": "number", "default": 78, "min": 0, "max": 100 },
     { "key": "color", "label": "Color del nombre", "type": "color", "default": "#a8f1dd" }
   ]

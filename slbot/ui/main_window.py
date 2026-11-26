@@ -685,8 +685,12 @@ class OverlaysTab(QWidget):
         self.reset_btn.setEnabled(bool(self._info.params))
         if not error:
             self._build_form(self._info)
-        self.status.setText(f"No se guardó: {error}" if error else
-                            "Apariencia guardada. Actualiza la fuente de OBS; la URL no cambia.")
+        if error:
+            self.status.setText(f"No se guardó: {error}")
+        elif overlay_id == "multi-chat":
+            self.status.setText("Apariencia guardada. La fuente abierta se actualiza sin cambiar la URL.")
+        else:
+            self.status.setText("Apariencia guardada. Actualiza la fuente de OBS; la URL no cambia.")
 
     def _create_alert(self) -> None:
         name, accepted = QInputDialog.getText(self, "Nueva alerta", "Nombre de la alerta:")

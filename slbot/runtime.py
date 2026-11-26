@@ -262,6 +262,8 @@ class Runtime:
         Config(settings=settings, triggers=self.config.triggers, actions=self.config.actions,
                path=self.config.path).save()
         self.config.settings = settings
+        if overlay_id == "multi-chat":
+            await self.overlays.broadcast(overlay_id, {"channel": "chat-settings", "values": checked})
 
     async def preview_overlay(self, overlay_id: str) -> None:
         if self.port is None:

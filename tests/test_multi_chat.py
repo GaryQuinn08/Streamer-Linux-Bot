@@ -49,6 +49,7 @@ class MultiChatTests(unittest.IsolatedAsyncioTestCase):
         async with aiohttp.ClientSession() as session:
             async with session.ws_connect(self.base + "/ws/multi-chat") as chat:
                 self.assertEqual((await chat.receive_json(timeout=2))["type"], "hello")
+                self.assertEqual(await chat.receive_json(timeout=2), {"channel": "chat-settings", "values": {}})
                 await self.rt.bus.publish(Event("twitch", "command", "viewer", {"text": "!demo"}))
                 await self.rt.bus.publish(Event("youtube", "follow", "viewer"))
                 await self.rt.bus.publish(Event("manual", "chat", "viewer", {"text": "ignored"}))
@@ -70,6 +71,7 @@ class MultiChatTests(unittest.IsolatedAsyncioTestCase):
         async with aiohttp.ClientSession() as session:
             async with session.ws_connect(self.base + "/ws/multi-chat") as chat:
                 await chat.receive_json(timeout=2)
+                await chat.receive_json(timeout=2)
                 await chat.send_json({"channel": "chat", "platform": "twitch", "text": "unauthorized"})
                 await self.rt.preview_overlay("multi-chat")
                 previews = [await chat.receive_json(timeout=2) for _ in range(4)]
@@ -80,5 +82,24 @@ class MultiChatTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue((await chat.receive_json(timeout=2))["simulated"])
             async with session.ws_connect(self.base + "/ws/multi-chat") as reopened:
                 self.assertEqual((await reopened.receive_json(timeout=2))["type"], "hello")
+                self.assertEqual((await reopened.receive_json(timeout=2))["channel"], "chat-settings")
                 with self.assertRaises(asyncio.TimeoutError):
                     await reopened.receive_json(timeout=.05)
+
+    async def test_save_and_reset_update_an_open_source_and_new_clients(self):
+        async with aiohttp.ClientSession() as session:
+            async with session.ws_connect(self.base + "/ws/multi-chat") as chat, \
+                    session.ws_connect(self.base + "/ws/event-feed") as feed:
+                await chat.receive_json(timeout=2)
+                await chat.receive_json(timeout=2)
+                await feed.receive_json(timeout=2)
+                preset = {"size": "36", "duration": "2"}
+                await self.rt.save_overlay_preset("multi-chat", preset)
+                self.assertEqual(await chat.receive_json(timeout=2), {"channel": "chat-settings", "values": preset})
+                with self.assertRaises(asyncio.TimeoutError):
+                    await feed.receive_json(timeout=.05)
+                async with session.ws_connect(self.base + "/ws/multi-chat") as another:
+                    await another.receive_json(timeout=2)
+                    self.assertEqual((await another.receive_json(timeout=2))["values"], preset)
+                await self.rt.save_overlay_preset("multi-chat", {})
+                self.assertEqual(await chat.receive_json(timeout=2), {"channel": "chat-settings", "values": {}})

@@ -161,6 +161,12 @@ class OverlayServer:
             await ws.send_str(json.dumps({"channel": "system", "type": "hello"}))
             if overlay_id == "live-goal":
                 await ws.send_str(json.dumps({"channel": "goal", "counts": self.rt.goal_counts}))
+            elif overlay_id == "multi-chat":
+                presets = self.rt.config.settings.get("overlay_presets", {})
+                values = presets.get(overlay_id, {}) if isinstance(presets, dict) else {}
+                await ws.send_str(json.dumps({
+                    "channel": "chat-settings", "values": values if isinstance(values, dict) else {},
+                }))
             async for _ in ws:  # los overlays solo escuchan; se ignora lo que envíen
                 pass
         finally:
