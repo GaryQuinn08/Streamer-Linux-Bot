@@ -11,7 +11,9 @@ import aiohttp
 from yarl import URL
 
 from .base import Connector
-from .oauth import SignInError, browser_client, sign_in, twitch_identity, youtube_live_chat
+from .oauth import (
+    TWITCH_WRITE_SCOPE, SignInError, browser_client, sign_in, twitch_session_identity, youtube_live_chat,
+)
 from ..core.events import Event
 
 
@@ -66,22 +68,23 @@ class _Receiver(Connector):
         self._task = None
         self._seen = OrderedDict()
 
-    async def start(self, *, browser=None, setting: str = ""):
+    async def start(self, *, browser=None, setting: str = "", twitch_write: bool = False):
         if self._task is None or self._task.done():
             self.status = "autoriza en el navegador…" if browser else "conectando…"
-            self._task = asyncio.create_task(self._run(browser, setting))
+            self._task = asyncio.create_task(self._run(browser, setting, twitch_write and self.name == "twitch"))
 
     @property
     def busy(self):
         return self._task is not None and not self._task.done()
 
-    async def _run(self, browser, setting):
+    async def _run(self, browser, setting, twitch_write):
         try:
             if browser:
                 client = await browser_client(self.name, setting)
-                token = await sign_in(client, browser)
+                options = {"twitch_write": True} if twitch_write else {}
+                token = await sign_in(client, browser, **options)
                 self.status = "autorizado; conectando…"
-                await self.receive((token, client.client_id))
+                await self.receive((token, client.client_id), **options)
             else:
                 await self.receive()
             self.status = "desconectado"
@@ -123,7 +126,57 @@ class _Receiver(Connector):
 class TwitchConnector(_Receiver):
     name = "twitch"
 
-    async def receive(self, authorization=None):
+    def __init__(self, rt):
+        super().__init__(rt)
+        self._writer = None
+        self._send_lock = asyncio.Lock()
+
+    @property
+    def can_send(self):
+        return self.status == "conectado (EventSub)" and self._writer is not None
+
+    async def send_chat(self, text: str) -> None:
+        text = text.strip()
+        if not 1 <= len(text) <= 500 or any(c in text for c in "\r\n\x00"):
+            raise SignInError("Escribe un mensaje de una línea, de 1 a 500 caracteres.")
+        if self._send_lock.locked():
+            raise SignInError("Espera a que termine el envío anterior.")
+        async with self._send_lock:
+            writer = self._writer
+            if writer is None or not self.can_send:
+                raise SignInError("Conecta Twitch con permiso para enviar mensajes.")
+            session, headers, owner = writer
+            try:
+                async with session.post(
+                    "https://api.twitch.tv/helix/chat/messages", headers=headers, allow_redirects=False,
+                    json={"broadcaster_id": owner, "sender_id": owner, "message": text},
+                ) as response:
+                    if response.status == 401:
+                        if self._writer is writer:
+                            self._writer = None
+                        raise SignInError("Twitch rechazó el permiso de envío. Desconecta y vuelve a autorizar.")
+                    if response.status == 429:
+                        raise SignInError("Twitch limitó los envíos. Espera antes de intentar de nuevo.")
+                    if response.status != 200:
+                        raise SignInError(f"Twitch no confirmó el envío (HTTP {response.status}).")
+                    body = await response.json()
+            except SignInError:
+                raise
+            except (aiohttp.ClientError, TimeoutError, ValueError):
+                raise SignInError("No se pudo confirmar el envío. Revisa el chat de Twitch antes de reintentar.") from None
+            messages = body.get("data") if isinstance(body, dict) else None
+            item = messages[0] if isinstance(messages, list) and messages and isinstance(messages[0], dict) else {}
+            if item.get("is_sent") is not True:
+                drop = item.get("drop_reason")
+                code = drop.get("code") if isinstance(drop, dict) else None
+                detail = {
+                    "automod_held": "AutoMod retuvo el mensaje para revisión.",
+                    "msg_duplicate": "Twitch descartó un mensaje duplicado.",
+                    "slow_mode": "El chat está en modo lento. Espera antes de volver a enviar.",
+                }.get(code) if isinstance(code, str) else None
+                raise SignInError(detail or "Twitch no confirmó el envío. Revisa el chat antes de reintentar.")
+
+    async def receive(self, authorization=None, *, twitch_write: bool = False):
         if authorization:
             token, client = authorization
             owner = ""
@@ -134,8 +187,16 @@ class TwitchConnector(_Receiver):
                 raise SignInError("Configura SLB_TWITCH_TOKEN, SLB_TWITCH_CLIENT_ID y SLB_TWITCH_BROADCASTER_ID.")
         headers = {"Authorization": f"Bearer {token}", "Client-Id": client}
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=9)) as session:
-            logged_in = await twitch_identity(session, token, client)
-            await self._events(session, token, client, owner or logged_in, headers)
+            logged_in, scopes = await twitch_session_identity(session, token, client)
+            if authorization and twitch_write:
+                if TWITCH_WRITE_SCOPE in scopes:
+                    self._writer = session, headers, logged_in
+                else:
+                    self.rt.log("Twitch: la cuenta no concedió permiso para enviar mensajes.")
+            try:
+                await self._events(session, token, client, owner or logged_in, headers)
+            finally:
+                self._writer = None
 
     async def _events(self, session, token, client, owner, headers):
         specs = (
@@ -174,7 +235,9 @@ class TwitchConnector(_Receiver):
             validate_at = loop.time() + 3500
             while True:
                 if loop.time() >= validate_at:
-                    await twitch_identity(session, token, client)
+                    _, scopes = await twitch_session_identity(session, token, client)
+                    if TWITCH_WRITE_SCOPE not in scopes:
+                        self._writer = None
                     validate_at = loop.time() + 3500
                 packet = await ws.receive_json(timeout=(info.get("keepalive_timeout_seconds") or 30) + 5)
                 metadata, payload = packet["metadata"], packet.get("payload", {})

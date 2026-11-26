@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from .runtime import Runtime
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost"}
+CHAT_PLATFORMS = ("twitch", "youtube", "kick", "tiktok")
 FEED_FIELDS = {
     "chat": ("text",),
     "gift": ("gift_name", "count"),
@@ -85,8 +86,7 @@ class OverlayServer:
                 self.clients.pop(ws, None)
 
     async def forward_event(self, ev: Event) -> None:
-        # Solo el feed integrado usa actividad de plataforma. Proyecta los
-        # campos de presentación, no el payload completo del conector.
+        # Los overlays integrados reciben solo campos de presentación.
         data = {
             key: ev.data[key]
             for key in FEED_FIELDS.get(ev.type, ())
@@ -95,6 +95,18 @@ class OverlayServer:
         await self.broadcast("event-feed", {
             "channel": "event", "platform": ev.platform, "type": ev.type,
             "user": ev.user, "ts": ev.ts, "data": data,
+        })
+        await self.forward_chat(ev)
+
+    async def forward_chat(self, ev: Event) -> None:
+        text = ev.data.get("text")
+        if (ev.type != "chat" or ev.platform not in CHAT_PLATFORMS
+                or not isinstance(text, str) or not text.strip()):
+            return
+        await self.broadcast("multi-chat", {
+            "channel": "chat", "platform": ev.platform,
+            "user": ev.user[:100] if isinstance(ev.user, str) else "",
+            "text": text[:500], "simulated": ev.data.get("simulated") is True,
         })
 
     # -- middleware --------------------------------------------------------

@@ -129,3 +129,33 @@ class WorkspaceTests(unittest.TestCase):
         window.history_page.refresh()
         self.assertEqual(window.history_page.table.rowCount(), 1)
         self.assertIn(window.history_page.table.item(0, 4).text(), ("Completada", "En curso"))
+
+    def test_twitch_composer_only_sends_manual_input_and_preserves_failed_draft(self):
+        from unittest.mock import AsyncMock, PropertyMock
+        from PySide6.QtCore import QCoreApplication, QEvent
+        from slbot.connectors.oauth import SignInError
+        from slbot.ui.monitor import SessionPanel
+
+        panel = SessionPanel(self.rt, chat=True)
+        def dispose():
+            panel.close()
+            panel.deleteLater()
+            QCoreApplication.sendPostedEvents(panel, QEvent.Type.DeferredDelete)
+        self.addCleanup(dispose)
+        twitch = self.rt.connectors["twitch"]
+        self.assertFalse(panel.twitch_send.isEnabled())
+        with patch.object(type(twitch), "can_send", new_callable=PropertyMock, return_value=True), \
+                patch.object(twitch, "send_chat", new_callable=AsyncMock) as send:
+            self.assertFalse(panel.twitch_send.isEnabled())
+            panel.twitch_message.setText("Borrador")
+            send.assert_not_called()
+            send.side_effect = SignInError("AutoMod retuvo el mensaje.")
+            panel.twitch_send.click()
+            self._wait_for(lambda: "AutoMod" in panel.send_result.text())
+            self.assertEqual(panel.twitch_message.text(), "Borrador")
+            send.side_effect = None
+            panel.twitch_send.click()
+            self._wait_for(lambda: panel.send_result.text() == "Twitch confirmó el envío.")
+            self.assertEqual(panel.twitch_message.text(), "")
+            self.assertEqual(send.await_count, 2)
+            send.assert_awaited_with("Borrador")

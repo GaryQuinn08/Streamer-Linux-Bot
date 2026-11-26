@@ -25,6 +25,7 @@ SPOTIFY_PORT = 17846
 SPOTIFY_REDIRECT = f"http://127.0.0.1:{SPOTIFY_PORT}/oauth/spotify"
 SPOTIFY_SCOPE = "user-modify-playback-state"
 TWITCH_SCOPES = "user:read:chat moderator:read:followers channel:read:subscriptions bits:read channel:read:redemptions"
+TWITCH_WRITE_SCOPE = "user:write:chat"
 GOOGLE_SCOPE = "https://www.googleapis.com/auth/youtube.readonly"
 OpenBrowser = Callable[[str], Awaitable[bool]]
 
@@ -107,13 +108,15 @@ def _challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).decode().rstrip("=")
 
 
-async def sign_in(client: Client, open_browser: OpenBrowser) -> str:
+async def sign_in(client: Client, open_browser: OpenBrowser, *, twitch_write: bool = False) -> str:
     twitch = client.platform == "twitch"
     spotify = client.platform == "spotify"
     provider = "Twitch" if twitch else "Spotify" if spotify else "Google"
     if twitch:
         auth_url, token_url = "https://id.twitch.tv/oauth2/authorize", "https://id.twitch.tv/oauth2/token"
         path, host, port, scope = "/oauth/twitch", "localhost", TWITCH_PORT, TWITCH_SCOPES
+        if twitch_write:
+            scope += f" {TWITCH_WRITE_SCOPE}"
     elif spotify:
         auth_url, token_url = "https://accounts.spotify.com/authorize", "https://accounts.spotify.com/api/token"
         path, host, port, scope = "/oauth/spotify", "127.0.0.1", SPOTIFY_PORT, SPOTIFY_SCOPE
@@ -197,7 +200,7 @@ async def _exchange(token_url: str, payload: dict, provider: str) -> str:
     return token
 
 
-async def twitch_identity(session, token: str, client: str) -> str:
+async def twitch_session_identity(session, token: str, client: str) -> tuple[str, tuple[str, ...]]:
     async with session.get("https://id.twitch.tv/oauth2/validate",
                            headers={"Authorization": f"OAuth {token}"}, allow_redirects=False) as reply:
         if reply.status == 401:
@@ -207,7 +210,8 @@ async def twitch_identity(session, token: str, client: str) -> str:
     owner = data.get("user_id")
     if data.get("client_id") != client or not isinstance(owner, str) or not owner.isdecimal():
         raise SignInError("Twitch no confirmó la cuenta para ese Client ID.")
-    return owner
+    scopes = data.get("scopes")
+    return owner, tuple(item for item in scopes if isinstance(item, str)) if isinstance(scopes, list) else ()
 
 
 async def youtube_live_chat(session, headers: dict[str, str]) -> str:

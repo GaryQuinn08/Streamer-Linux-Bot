@@ -11,7 +11,7 @@
  * Mensajes en vivo:
  *   SLB.onEvent("gift", fn)           -> eventos de plataforma (solo feed integrado)
  *   SLB.onAlert("mi-overlay", fn)     -> alertas que una acción envía a este overlay
- *   SLB.onMessage(fn)                 -> mensajes de esta suscripción
+ *   SLB.onMessage(fn)                 -> mensajes de esta suscripción (p. ej. el chat integrado)
  *
  * IMPORTANTE: usa siempre textContent (no innerHTML) para mostrar nombres y
  * mensajes de los espectadores; así no pueden inyectar HTML en tu stream.

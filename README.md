@@ -6,7 +6,7 @@ Aplicación de escritorio para Linux que automatiza tu stream: recibe eventos
 (chat, seguidores, regalos, donaciones...), los pasa por **triggers** y ejecuta
 **acciones** (alertas en pantalla, cambios de escena en OBS, sonidos, TTS...).
 
-## Beta 5 para Linux
+## Beta 6 para Linux
 
 Instalación desde el repositorio sin ZIP ni dependencias de Qt de APT.
 Conserva el perfil de la beta anterior, incluido el catálogo y las alertas
@@ -16,6 +16,11 @@ El espacio de automatización pone **Acciones, Triggers y Subacciones**
 juntos. Las conexiones, el catálogo, la música y el registro tienen su
 propia sección. TikTok directo no necesita TikFinity ni inicio de sesión:
 funciona con el @ en directo y el conector opcional no oficial.
+
+En **Chat** puedes leer varias plataformas y enviar manualmente a Twitch
+si al conectar activaste el permiso de envío. También puedes añadir
+**Overlays → Chat multiplataforma** como fuente de navegador de OBS
+o como fuente Enlace de LIVE Studio, donde esté disponible.
 
 ### Linux Mint, Ubuntu o Debian
 

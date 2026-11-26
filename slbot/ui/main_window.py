@@ -363,7 +363,7 @@ class TriggersTab(QWidget):
         selected = selected or self.destination.currentData()
         self.destination.clear()
         for item in sorted(list_overlays().values(), key=lambda item: item.id != "gift-alert"):
-            if item.id != "event-feed":
+            if item.id not in {"event-feed", "live-goal", "multi-chat"}:
                 self.destination.addItem(item.name, item.id)
         index = self.destination.findData(selected)
         self.destination.setCurrentIndex(max(index, 0))

@@ -32,7 +32,7 @@ from .core.engine import Engine
 from .core.editing import update_rules
 from .core.events import Event, EventBus
 from .overlay_manager import find_overlay, validate_overlay_values
-from .overlay_server import OverlayServer
+from .overlay_server import CHAT_PLATFORMS, OverlayServer
 
 log = logging.getLogger("slb.runtime")
 
@@ -275,6 +275,11 @@ class Runtime:
         elif overlay_id == "event-feed":
             await self.overlays.forward_event(Event("tiktok", "gift", "viewer_demo",
                                                     {"gift_name": "Rose", "count": 3}))
+        elif overlay_id == "multi-chat":
+            for platform in CHAT_PLATFORMS:
+                await self.overlays.forward_chat(Event(platform, "chat", "viewer_demo", {
+                    "text": "Así se verá el chat en tu transmisión.", "simulated": True,
+                }))
         else:
             await self.overlays.broadcast(overlay_id, {
                 "channel": "alert", "overlay": overlay_id, "title": "viewer_demo envió Rose", "text": "x3",

@@ -16,7 +16,7 @@ from slbot.runtime import Runtime
 
 
 class OAuthTests(unittest.IsolatedAsyncioTestCase):
-    async def check_provider(self, client, host):
+    async def check_provider(self, client, host, **options):
         posted = {}
 
         async def browser(url):
@@ -38,7 +38,7 @@ class OAuthTests(unittest.IsolatedAsyncioTestCase):
 
         exchange = AsyncMock(return_value="fixture-token")
         with patch.object(oauth, "_exchange", exchange):
-            token = await oauth.sign_in(client, browser)
+            token = await oauth.sign_in(client, browser, **options)
         self.assertEqual(token, "fixture-token")
         auth = urlsplit(posted["auth"])
         self.assertEqual(auth.hostname, host)
@@ -53,10 +53,17 @@ class OAuthTests(unittest.IsolatedAsyncioTestCase):
         expected_endpoint = {"twitch": "id.twitch.tv", "youtube": "oauth2.googleapis.com",
                              "spotify": "accounts.spotify.com"}[client.platform]
         self.assertEqual(urlsplit(endpoint).hostname, expected_endpoint)
+        if client.platform == "twitch":
+            self.assertEqual(oauth.TWITCH_WRITE_SCOPE in params["scope"][0].split(),
+                             options.get("twitch_write", False))
 
     async def test_twitch_browser_callback(self):
         with patch.object(oauth, "TWITCH_PORT", 0):
             await self.check_provider(oauth.Client("twitch", "public12345"), "id.twitch.tv")
+
+    async def test_twitch_write_permission_is_explicit(self):
+        with patch.object(oauth, "TWITCH_PORT", 0):
+            await self.check_provider(oauth.Client("twitch", "public12345"), "id.twitch.tv", twitch_write=True)
 
     async def test_google_browser_callback(self):
         await self.check_provider(oauth.Client("youtube", "fixture.apps.googleusercontent.com", "client-fixture"),

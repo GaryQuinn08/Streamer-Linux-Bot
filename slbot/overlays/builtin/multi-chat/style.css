@@ -1,0 +1,81 @@
+:root {
+  --chat-name: #a8f1dd;
+  --chat-size: 22px;
+  --chat-opacity: .78;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: hidden;
+  background: transparent;
+  color: #f2f6fc;
+  font-family: "Noto Sans", "Segoe UI", Arial, sans-serif;
+}
+
+#chat {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  margin: 0;
+  padding: 10px;
+  list-style: none;
+  font-size: var(--chat-size);
+  display: grid;
+  gap: 6px;
+}
+
+.message {
+  --platform: #98a8bb;
+  min-inline-size: 0;
+  color: #f2f6fc;
+  background: rgba(13, 19, 28, var(--chat-opacity));
+  border-inline-start: 3px solid var(--platform);
+  border-radius: 6px;
+  padding: .36em .56em;
+  line-height: 1.34;
+  overflow-wrap: anywhere;
+  animation: appear .18s ease-out;
+}
+
+.message[data-platform="twitch"] { --platform: #c39af9; }
+.message[data-platform="youtube"] { --platform: #ffa3a9; }
+.message[data-platform="kick"] { --platform: #aee587; }
+.message[data-platform="tiktok"] { --platform: #7ce8eb; }
+
+.platform, .demo {
+  display: inline-block;
+  margin-inline-end: .42em;
+  padding: .15em .4em;
+  border: 1px solid currentColor;
+  border-radius: .35em;
+  color: var(--platform);
+  font-size: .58em;
+  line-height: 1.15;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  vertical-align: .14em;
+}
+
+.demo {
+  color: #ffce7b;
+  background: #3b2c19;
+}
+
+.sender {
+  color: var(--chat-name);
+  font-weight: 750;
+}
+
+@keyframes appear {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message { animation: none; }
+}

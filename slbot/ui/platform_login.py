@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import QSettings, Qt, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QGroupBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
+    QCheckBox, QGroupBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
 )
 
 from ..connectors.oauth import deployment_setting
@@ -48,6 +48,11 @@ class PlatformLoginPanel(QGroupBox):
             status.setWordWrap(True)
             layout.addWidget(status)
             self.controls[key] = connect, disconnect, status
+            if key == "twitch":
+                self.twitch_write = QCheckBox("Autorizar envío manual al chat de Twitch")
+                self.twitch_write.setObjectName("twitch-write-permission")
+                self.twitch_write.setToolTip("Actívalo antes de conectar. Si ya estás conectado, desconecta primero.")
+                layout.addWidget(self.twitch_write)
 
         help_button = QPushButton("Ayuda con las conexiones")
         help_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(GUIDE)))
@@ -76,7 +81,8 @@ class PlatformLoginPanel(QGroupBox):
         if not setting:
             return
         self.controls[platform][0].setEnabled(False)
-        self.rt.submit(connector.start(browser=self._browser, setting=setting))
+        options = {"twitch_write": True} if platform == "twitch" and self.twitch_write.isChecked() else {}
+        self.rt.submit(connector.start(browser=self._browser, setting=setting, **options))
 
     def _stop(self, platform):
         self.rt.submit(self.rt.connectors[platform].stop())
@@ -106,3 +112,5 @@ class PlatformLoginPanel(QGroupBox):
             else:
                 label.setText(connector.status)
             disconnect.setEnabled(busy)
+            if key == "twitch":
+                self.twitch_write.setEnabled(available and not busy)

@@ -136,7 +136,8 @@ class StepForm(Form):
                 widget.setChecked(value is True or str(value).lower() in ("true", "1", "sí", "si", "yes"))
                 row = widget
             elif mode == "overlay":
-                widget = combo([(o.name, o.id) for o in list_overlays().values()], value)
+                widget = combo([(o.name, o.id) for o in list_overlays().values()
+                                if o.id not in {"event-feed", "live-goal", "multi-chat"}], value)
                 row = widget
             elif mode == "file":
                 widget = QLineEdit(str(value))

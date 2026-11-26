@@ -41,6 +41,20 @@ mantenedor con la [guía de registro](OAUTH.md), no cada streamer. Si ya
 habías configurado el cliente con la beta anterior, el bot todavía puede
 usarlo. Los tokens solo existen en memoria; si vencen, vuelve a conectar.
 
+### Enviar mensajes a Twitch
+
+Con Twitch desconectado, marca **Autorizar envío manual al chat de Twitch**
+en **Conexiones**, vuelve a conectar y acepta el permiso adicional en
+Twitch. En **Chat**, escribe tu mensaje y pulsa **Enviar a Twitch**. Se
+publica desde la cuenta que autorizaste, en su propio canal. Twitch puede
+mostrarlo también en otros canales si usas Chat compartido. El bot no
+reintenta automáticamente un envío fallido y conserva el borrador.
+
+Sin marcar la casilla, Twitch permanece en modo lectura. No hay envío
+automático ni envío hacia YouTube, Kick o TikTok. **Simular mensaje**
+no publica en ninguna plataforma. El envío usa la
+[API oficial de Twitch](https://dev.twitch.tv/docs/api/reference/chat/#send-chat-message).
+
 ### Servidor sin interfaz
 
 El modo `servidor` conserva las variables de entorno, sin abrir navegador.
