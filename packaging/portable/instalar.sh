@@ -10,14 +10,16 @@ headless=0
 tiktok=0
 kick=0
 voice=ask
+natural=auto
 for arg in "$@"; do
     case "$arg" in
         --servidor) headless=1 ;;
         --kick) kick=1 ;;
         --tiktok) tiktok=1 ;;
         --voz) voice=yes ;;
-        --sin-voz) voice=no ;;
-        *) echo "Uso: bash instalar.sh [--servidor] [--tiktok] [--kick] [--voz | --sin-voz]" >&2; exit 2 ;;
+        --voz-natural) natural=yes ;;
+        --sin-voz) voice=no; natural=no ;;
+        *) echo "Uso: bash instalar.sh [--servidor] [--tiktok] [--kick] [--voz | --sin-voz] [--voz-natural]" >&2; exit 2 ;;
     esac
 done
 source_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
@@ -99,6 +101,22 @@ if [ "$kick" -eq 1 ]; then
     "$target/venv/bin/python" -m pip --isolated --disable-pip-version-check install \
         --index-url https://pypi.org/simple --only-binary=:all: -r "$source_dir/requirements-kick.txt"
 fi
+voice_cache="$data_home/streamer-linux-bot/voices/es_MX-claude-high"
+if [ "$natural" = yes ] || { [ "$natural" = auto ] && [ "$headless" -eq 0 ] &&
+                             [ -f "$voice_cache/es_MX-claude-high.onnx" ] &&
+                             [ -f "$voice_cache/es_MX-claude-high.onnx.json" ]; }; then
+    echo "Preparando voz natural en español de México (Piper). Descarga inicial aproximada: 120 MB…"
+    if ! "$target/venv/bin/python" -m pip --isolated --disable-pip-version-check install \
+            --index-url https://pypi.org/simple --only-binary=:all: 'piper-tts==1.4.2' ||
+       ! (cd "$target" && venv/bin/python -m slbot.natural_voice --descargar &&
+          printf '%s\n' 'Hola, esta es la voz de Streamer Linux Bot.' |
+          venv/bin/python -m slbot.natural_voice --generar "$target/prueba-voz.wav"); then
+        echo "No se pudo instalar la voz natural. La instalación anterior no se modificó." >&2
+        exit 1
+    fi
+    rm -f -- "$target/prueba-voz.wav"
+    touch "$target/venv/.slb-natural-voice"
+fi
 if [ "$headless" -eq 1 ]; then
     "$target/streamer-linux-bot" --help >/dev/null
     completed=1
@@ -125,7 +143,9 @@ voice_packages() {
 }
 check_voice() {
     missing=
-    if ! command -v espeak-ng >/dev/null 2>&1; then missing=espeak-ng; fi
+    if [ ! -f "$target/venv/.slb-natural-voice" ] && ! command -v espeak-ng >/dev/null 2>&1; then
+        missing=espeak-ng
+    fi
     if ! command -v paplay >/dev/null 2>&1 &&
        ! command -v pw-play >/dev/null 2>&1 &&
        ! command -v mpv >/dev/null 2>&1 &&

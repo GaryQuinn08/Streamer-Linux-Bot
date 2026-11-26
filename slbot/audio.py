@@ -7,6 +7,7 @@ import os
 import re
 import socket
 import shutil
+import sys
 import tempfile
 from dataclasses import dataclass
 from itertools import count
@@ -14,6 +15,8 @@ from pathlib import Path
 
 import aiohttp
 from yarl import URL
+
+from . import natural_voice
 
 AUDIO_TYPES = {".wav", ".mp3", ".ogg", ".opus", ".flac", ".m4a", ".aac"}
 _REMOTE_LIMIT = 48 * 1024 * 1024
@@ -339,6 +342,13 @@ async def _say(rt, value: str) -> None:
     with tempfile.TemporaryDirectory() as folder:
         wav = Path(folder) / "voz.wav"
         model = os.environ.get("SLB_PIPER_MODEL", "")
+        if not model and natural_voice.enabled():
+            if not await _voice_command(sys.executable, "-m", "slbot.natural_voice", "--generar", str(wav),
+                                        text=text, timeout=15) or not _has_voice_wav(wav):
+                raise VoiceError("No se pudo generar la voz natural. Vuelve a instalar con --voz-natural "
+                                 "y prueba otra vez. No se usó la voz básica.")
+            await _play_voice(wav)
+            return
         if model:
             voice = Path(model).expanduser().resolve()
             piper = os.environ.get("SLB_PIPER") or shutil.which("piper")

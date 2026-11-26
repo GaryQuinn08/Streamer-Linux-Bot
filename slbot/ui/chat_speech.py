@@ -1,8 +1,12 @@
 """Desktop controls for the shared, opt-in chat narrator."""
 from __future__ import annotations
 
+import os
+
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtWidgets import QCheckBox, QGroupBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+
+from .. import natural_voice
 
 PLATFORMS = (("twitch", "Twitch"), ("tiktok", "TikTok"), ("youtube", "YouTube"), ("kick", "Kick"))
 
@@ -50,6 +54,14 @@ class ChatSpeechPanel(QGroupBox):
         buttons.addStretch(1)
         layout.addLayout(buttons)
 
+        if os.environ.get("SLB_PIPER_MODEL"):
+            voice_label = "Piper personalizado"
+        elif natural_voice.enabled():
+            voice_label = natural_voice.VOICE_LABEL + " · voz natural"
+        else:
+            voice_label = "eSpeak NG · voz básica"
+        self.voice_label = QLabel("Voz local: " + voice_label)
+        layout.addWidget(self.voice_label)
         hint = QLabel("La voz es la misma en todas las plataformas. "
                       "Este ajuste no cambia el multichat ni el overlay. "
                       "Si OBS captura el audio del bot, la voz saldrá en la emisión.")

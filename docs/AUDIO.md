@@ -24,8 +24,8 @@ Desde la **beta 15**, abre **Chat → Leer chat en voz alta (TTS)**. La lectura
 automática viene apagada. Marca **Leer automáticamente los mensajes nuevos**,
 elige cualquiera de Twitch, TikTok, YouTube o Kick y pulsa **Guardar lectura**.
 Los mensajes de las plataformas desmarcadas siguen apareciendo en tu chat.
-Las cuatro usan la misma voz local: espeak-ng en español, o Piper si ya lo
-configuraste. No se suben los mensajes a un servicio de voz.
+Las cuatro usan la misma voz y las acciones de TTS también. Con voz natural
+instalada usan Piper; sin ella, eSpeak NG. No se suben los mensajes a un servicio de voz.
 
 **Probar voz** reproduce una frase de prueba sin conectar cuentas ni activar la
 lectura automática. **Detener y vaciar cola** interrumpe la voz del lector y
@@ -62,7 +62,29 @@ retransmitirse en OBS o LIVE Studio. Consulta las
 [condiciones de reproducción de Spotify](https://developer.spotify.com/documentation/web-api/reference/add-to-queue).
 No hay conexión con Apple Music o YouTube Music en esta versión.
 
-## Piper (opcional)
+## Voz natural en español de México
+
+Para la instalación portable desde Git o ZIP, ejecuta:
+
+```bash
+bash instalar.sh --tiktok --voz-natural
+```
+
+Quita `--tiktok` si no usas el conector directo. La primera instalación de voz
+descarga cerca de 120 MB extra (Piper y su modelo), no pide cuenta ni claves y
+reutiliza el modelo en la siguiente actualización. Incluye una prueba de síntesis
+antes de activar la instalación. Después, no necesita Internet para hablar.
+En **Chat** verás «Claude (español de México) · voz natural» y puedes escucharla
+con **Probar voz**. Si falla la síntesis, te avisa en lugar de cambiar a la voz
+básica sin avisar. Si ya elegiste un modelo con `SLB_PIPER_MODEL`, ese modelo
+conserva prioridad. Los ajustes de qué plataformas se leen no cambian.
+
+La voz no es Alexa. El [modelo Claude y sus créditos](https://huggingface.co/rhasspy/piper-voices/blob/main/es/es_MX/claude/high/MODEL_CARD)
+identifican el conjunto de datos de HirCoir (Apache 2.0). Piper es una
+herramienta de terceros que el instalador obtiene de PyPI; no incluimos sus
+binarios ni el modelo en el ZIP o en el .deb.
+
+## Usar otro modelo Piper o configurar Piper en la versión .deb
 
 Instala [Piper](https://github.com/OHF-Voice/piper1-gpl) en un entorno separado y
 descarga una voz de tu elección. Consulta la licencia de esa voz antes de

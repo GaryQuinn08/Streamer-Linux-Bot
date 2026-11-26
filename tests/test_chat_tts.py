@@ -239,6 +239,27 @@ class LocalVoiceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual([call.args[0] for call in process.await_args_list], ["piper-fixture", "/usr/bin/espeak-ng"])
             play.assert_awaited_once()
 
+    async def test_installed_natural_voice_uses_shared_player_and_never_falls_back_silently(self):
+        async def run(*args, **kwargs):
+            Path(args[-1]).write_bytes(b"x" * 100)
+            return True
+
+        with patch.dict(os.environ, {"SLB_PIPER_MODEL": ""}), patch(
+            "slbot.natural_voice.enabled", return_value=True,
+        ), patch("slbot.audio._voice_command", side_effect=run) as command, patch(
+            "slbot.audio._play_voice", new_callable=AsyncMock,
+        ) as play, patch("slbot.audio.shutil.which") as resolve:
+            await audio.say(SimpleNamespace(), "Hola, chat")
+            self.assertEqual(command.await_args.args[:-1],
+                             (sys.executable, "-m", "slbot.natural_voice", "--generar"))
+            self.assertEqual(command.await_args.kwargs["text"], "Hola, chat")
+            play.assert_awaited_once()
+            command.side_effect = None
+            command.return_value = False
+            with self.assertRaisesRegex(audio.VoiceError, "No se usó la voz básica"):
+                await audio.say(SimpleNamespace(), "Hola de nuevo")
+            resolve.assert_not_called()
+
     async def test_cancelling_during_process_creation_recovers_and_stops_child(self):
         spawned, ready = asyncio.Event(), asyncio.Event()
         terminated = []

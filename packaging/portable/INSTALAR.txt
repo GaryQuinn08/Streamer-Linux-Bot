@@ -1,4 +1,4 @@
-Streamer Linux Bot, beta 16
+Streamer Linux Bot, beta 17
 
 Requisitos: Linux, Python 3.11 o superior e Internet. En Mint, Debian o Ubuntu,
 si faltan dependencias del sistema:
@@ -13,7 +13,8 @@ y ejecuta sin sudo:
 
 Opciones del instalador: --tiktok (conector directo de terceros),
 --servidor (sin Qt), --kick (verificación de webhooks de Kick),
---voz (instala las dependencias de voz que falten con APT) y --sin-voz.
+--voz (instala las dependencias de audio que falten con APT), --sin-voz
+y --voz-natural (Piper en español de México, unos 120 MB la primera vez).
 La instalación no modifica las alertas ni la configuración del perfil.
 
 En la instalación de escritorio interactiva, el instalador ofrece preparar
