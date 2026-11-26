@@ -18,7 +18,6 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, replace
-from itertools import count
 from pathlib import Path
 from typing import Any, Callable, Coroutine
 
@@ -32,7 +31,8 @@ from .connectors.platforms import TwitchConnector, YoutubeConnector
 from .connectors.tiktok import TiktokConnector
 from .connectors.spotify import SpotifyConnector
 from .connectors.simulator import sample_event
-from .core.actions import run_action, overlay_variables
+from .core.actions import overlay_variables
+from .core.action_queue import ActionQueue, ActionRun
 from .core.config import Config, DEFAULT_ACTIONS, DEFAULT_TRIGGERS, Action, Trigger
 from .core.engine import Engine
 from .core.editing import update_rules
@@ -43,19 +43,6 @@ from .overlay_server import CHAT_PLATFORMS, OverlayServer
 from .paths import user_overlays_dir
 
 log = logging.getLogger("slb.runtime")
-
-
-@dataclass(frozen=True)
-class ActionRun:
-    id: int
-    at: float
-    action: str
-    origin: str
-    platform: str
-    event: str
-    state: str = "En curso"
-    failures: int = 0
-    duration_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -83,9 +70,7 @@ class Runtime:
         self._monitor_lock = threading.Lock()
         self.goal_counts = {"gift": 0, "follow": 0}
         self._chat: deque[ChatLine] = deque(maxlen=400)
-        self._action_history: deque[ActionRun] = deque(maxlen=300)
-        self._running_actions: deque[ActionRun] = deque(maxlen=300)
-        self._action_ids = count(1)
+        self.action_queue = ActionQueue(self)
 
         self.loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
@@ -151,8 +136,7 @@ class Runtime:
             return tuple(self._chat)
 
     def action_snapshot(self) -> tuple[ActionRun, ...]:
-        with self._monitor_lock:
-            return tuple(self._running_actions) + tuple(self._action_history)
+        return self.action_queue.snapshot()
 
     async def _track_chat(self, event: Event) -> None:
         if event.type == "chat" and isinstance(event.data.get("text"), str):
@@ -183,27 +167,22 @@ class Runtime:
     async def clear_chat_tts(self) -> None:
         await self.chat_tts.clear()
 
-    async def execute_action(self, action: Action, event: Event, origin: str) -> None:
+    async def execute_action(self, action: Action, event: Event, origin: str) -> ActionRun:
         if self.editor_only:
             raise ValueError("El editor de perfil no ejecuta acciones.")
-        run = ActionRun(next(self._action_ids), time.time(), action.name, origin, event.platform, event.type)
-        start = time.monotonic()
-        with self._monitor_lock:
-            self._running_actions.append(run)
-        state, failures = "Cancelada", 0
-        try:
-            failures = await run_action(self, action, event)
-            state = "Con errores" if failures else "Completada"
-        except Exception:
-            state, failures = "Con errores", 1
-            raise
-        finally:
-            result = replace(run, state=state, failures=failures,
-                             duration_ms=int((time.monotonic() - start) * 1000))
-            with self._monitor_lock:
-                if run in self._running_actions:
-                    self._running_actions.remove(run)
-                self._action_history.append(result)
+        return await self.action_queue.execute(action, event, origin)
+
+    async def schedule_action_test(self, action: Action, event: Event) -> None:
+        if self.editor_only:
+            raise ValueError("El editor de perfil no ejecuta acciones.")
+        self.spawn(self.execute_action(action, event, "Prueba manual"))
+
+    async def pause_actions(self, paused: bool) -> None:
+        self.action_queue.set_paused(paused)
+
+    async def cancel_action(self, ident: int) -> None:
+        if not self.action_queue.cancel(ident):
+            raise ValueError("La ejecución ya no está pendiente ni en curso.")
 
     async def edit_rule(self, kind: str, data: dict, *, delete: bool = False) -> None:
         update_rules(self.config, kind, data, delete=delete)

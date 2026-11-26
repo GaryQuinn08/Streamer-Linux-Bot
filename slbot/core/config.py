@@ -29,6 +29,7 @@ class Trigger:
     platform: str = "*"  # "*" = cualquier plataforma
     filters: dict[str, Any] = field(default_factory=dict)
     cooldown_s: float = 0.0
+    user_cooldown_s: float = 0.0
 
     def matches(self, ev: Event) -> bool:
         if self.platform not in ("*", ev.platform):
@@ -47,8 +48,16 @@ class Trigger:
             return False
         if "contains" in f and str(f["contains"]).lower() not in str(ev.data.get("text", "")).lower():
             return False
-        if "command" in f and str(ev.data.get("command", "")).lower() != str(f["command"]).lower():
-            return False
+        if "command" in f or "command_aliases" in f:
+            command = str(ev.data.get("command", "")).casefold()
+            exact = f.get("command")
+            aliases = f.get("command_aliases", [])
+            if not command or not (
+                isinstance(exact, str) and command == exact.casefold()
+                or isinstance(aliases, list)
+                and any(isinstance(alias, str) and command == alias.casefold() for alias in aliases)
+            ):
+                return False
         return True
 
     @classmethod
@@ -56,8 +65,19 @@ class Trigger:
         if not isinstance(d, dict):
             raise ValueError("Un trigger debe ser un objeto.")
         cooldown = float(d.get("cooldown_s", 0))
+        user_cooldown = float(d.get("user_cooldown_s", 0))
         if not math.isfinite(cooldown) or cooldown < 0:
             raise ValueError("Cooldown inválido")
+        if not math.isfinite(user_cooldown) or not 0 <= user_cooldown <= 86400:
+            raise ValueError("La espera por usuario debe ser de 0 a 86 400 segundos.")
+        filters = dict(d.get("filters", {}))
+        if "command_aliases" in filters:
+            aliases = filters["command_aliases"]
+            if not isinstance(aliases, list) or not 1 <= len(aliases) <= 20 or any(
+                not isinstance(a, str) or not 1 <= len(a) <= 40 or a.startswith("!")
+                or not a.isprintable() or any(c.isspace() for c in a) for a in aliases
+            ):
+                raise ValueError("Escribe hasta 20 alias de una palabra de 40 caracteres, sin !.")
         return cls(
             id=str(d["id"]),
             event_type=str(d["event_type"]),
@@ -65,12 +85,13 @@ class Trigger:
             name=str(d.get("name", d["id"])),
             enabled=bool(d.get("enabled", True)),
             platform=str(d.get("platform", "*")),
-            filters=dict(d.get("filters", {})),
+            filters=filters,
             cooldown_s=cooldown,
+            user_cooldown_s=user_cooldown,
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data = {
             "id": self.id,
             "name": self.name,
             "enabled": self.enabled,
@@ -80,6 +101,9 @@ class Trigger:
             "cooldown_s": self.cooldown_s,
             "action_id": self.action_id,
         }
+        if self.user_cooldown_s:
+            data["user_cooldown_s"] = self.user_cooldown_s
+        return data
 
 
 @dataclass
@@ -89,6 +113,7 @@ class Action:
     id: str
     name: str = ""
     steps: list[dict[str, Any]] = field(default_factory=list)
+    queue: str = ""  # vacío conserva el modo paralelo
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Action":
@@ -97,10 +122,18 @@ class Action:
         steps = d.get("steps", [])
         if not isinstance(steps, list) or any(not isinstance(step, dict) for step in steps):
             raise ValueError("Cada paso de una acción debe ser un objeto")
-        return cls(id=str(d["id"]), name=str(d.get("name", d["id"])), steps=steps)
+        queue = d.get("queue", "")
+        if not isinstance(queue, str) or len(queue.strip()) > 40 or (
+            queue.strip() and not queue.strip().isprintable()
+        ):
+            raise ValueError("La cola debe tener un nombre de hasta 40 caracteres en una sola línea.")
+        return cls(id=str(d["id"]), name=str(d.get("name", d["id"])), steps=steps, queue=queue.strip())
 
     def to_dict(self) -> dict[str, Any]:
-        return {"id": self.id, "name": self.name, "steps": self.steps}
+        data = {"id": self.id, "name": self.name, "steps": self.steps}
+        if self.queue:
+            data["queue"] = self.queue
+        return data
 
 
 DEFAULT_SETTINGS: dict[str, Any] = {

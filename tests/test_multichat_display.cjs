@@ -81,9 +81,31 @@ async function main() {
 
     const scoped = await browser.newPage();
     await open(scoped,'?twitch=true&tiktok=false&youtube=false&kick=false&twitchColor=not-a-color');
+    const original = page.url(), scopedOriginal = scoped.url();
+    // Recover from the older GUI's "Mostrar [plataforma]" settings, all of which
+    // may be off. Output scope is independent of these saved default sources.
+    send('preset',{twitch:'false',tiktok:'false',youtube:'false',kick:'false',duration:'0'});
+    await page.locator('.message').first().waitFor({state:'detached'});
+    send('messages','Sin fuentes generales');
+    await scoped.getByText('Sin fuentes generales',{exact:true}).waitFor();
+    assert.equal(await page.locator('.message').count(),0);
+    // Equivalent to using "Incluir las cuatro fuentes y ocultar etiquetas" and
+    // saving in Qt. Keep original Browser Sources open; no new URL or reload.
+    send('preset',{badges:'false',duration:'0'});
+    await scoped.locator('.message .platform').first().waitFor({state:'hidden'});
+    assert.equal(await scoped.getByText('Sin fuentes generales',{exact:true}).count(),1);
     send('messages','Solo plataforma');
     await scoped.getByText('Solo plataforma',{exact:true}).waitFor();
-    assert.deepEqual(await scoped.locator('.message').evaluateAll(nodes => nodes.map(el => el.dataset.platform)), ['twitch']);
+    await page.locator('.message[data-platform=kick]').getByText('Solo plataforma',{exact:true}).waitFor();
+    assert.deepEqual(await scoped.locator('.message').evaluateAll(nodes => nodes.map(el => el.dataset.platform)), ['twitch','twitch']);
+    assert.equal(await page.getByText('Solo plataforma',{exact:true}).count(),4);
+    assert.equal(await page.locator('.message .platform:visible').count(),0);
+    assert.equal(await page.locator('.message .sender:visible').count(),4);
+    send('preset',{badges:'true',duration:'0'});
+    await page.locator('.message .platform:visible').first().waitFor();
+    assert.equal(await page.getByText('Solo plataforma',{exact:true}).count(),4);
+    assert.equal(page.url(),original);
+    assert.equal(scoped.url(),scopedOriginal);
     await scoped.close();
     assert.deepEqual(errors,[]);
     console.log('PASS: four platform colors, live customization, independent labels/names, isolated Twitch link.');

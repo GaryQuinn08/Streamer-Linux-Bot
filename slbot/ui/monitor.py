@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QLineEdit, QPushBu
 
 from ..connectors.oauth import SignInError
 from ..connectors.simulator import sample_event
+from ..core.action_queue import ACTIVE_STATES
 from .chat_speech import ChatSpeechPanel
 from .rule_editor import ActionWorkspace
 
@@ -18,6 +19,7 @@ def _clock(at):
 
 class SessionPanel(QWidget):
     send_finished = Signal(str)
+    queue_finished = Signal(str)
 
     def __init__(self, runtime, *, chat):
         super().__init__()
@@ -36,13 +38,30 @@ class SessionPanel(QWidget):
             sample = QPushButton("Simular mensaje")
             sample.clicked.connect(lambda: self.rt.emit(sample_event("chat")))
             controls.addWidget(sample)
+        else:
+            self.pause_button = QPushButton("Pausar nuevas acciones")
+            self.pause_button.clicked.connect(lambda: self._queue_request(
+                self.rt.pause_actions(not self.rt.action_queue.paused)))
+            self.cancel_button = QPushButton("Cancelar ejecución")
+            self.cancel_button.clicked.connect(self._cancel_selected)
+            self.cancel_button.setEnabled(False)
+            controls.addWidget(self.pause_button)
+            controls.addWidget(self.cancel_button)
+            self.queue_finished.connect(self._queue_done, Qt.ConnectionType.QueuedConnection)
         controls.addStretch(1)
         layout.addLayout(controls)
         headers = ("Hora", "Plataforma", "Usuario", "Mensaje") if chat else (
-            "Hora", "Acción", "Origen", "Evento", "Estado", "Tiempo")
+            "Hora", "Acción", "Origen", "Evento", "Estado", "Tiempo", "Cola")
         self.table = ActionWorkspace._table(headers, "chat-monitor" if chat else "action-history",
                                             stretch=3 if chat else 1)
         layout.addWidget(self.table)
+        if not chat:
+            self._runs = ()
+            self.table.itemSelectionChanged.connect(self._update_cancel_button)
+            self.queue_result = QLabel()
+            self.queue_result.setTextFormat(Qt.TextFormat.PlainText)
+            self.queue_result.setWordWrap(True)
+            layout.addWidget(self.queue_result)
         self.notice = QLabel()
         self.notice.setWordWrap(True)
         layout.addWidget(self.notice)
@@ -122,9 +141,44 @@ class SessionPanel(QWidget):
         self.send_result.setText(error or "Twitch confirmó el envío.")
         self._refresh_twitch()
 
+    def _selected_run(self):
+        row = self.table.currentRow()
+        if self.table.selectedItems() and 0 <= row < len(self._runs):
+            return self._runs[row]
+        return None
+
+    def _update_cancel_button(self):
+        run = self._selected_run()
+        self.cancel_button.setEnabled(run is not None and run.state in ACTIVE_STATES)
+
+    def _cancel_selected(self):
+        run = self._selected_run()
+        if run is not None and run.state in ACTIVE_STATES:
+            self._queue_request(self.rt.cancel_action(run.id))
+
+    def _queue_request(self, coro):
+        notify = self.queue_finished
+
+        def finished(future):
+            error = "Operación cancelada." if future.cancelled() else str(future.exception() or "")
+            try:
+                notify.emit(error)
+            except RuntimeError:
+                pass
+
+        self.rt.submit(coro).add_done_callback(finished)
+
+    @Slot(str)
+    def _queue_done(self, error):
+        self.queue_result.setText(error)
+        self.refresh()
+
     def refresh(self, *_):
         if self.chat:
             self._refresh_twitch()
+        else:
+            paused = self.rt.action_queue.paused
+            self.pause_button.setText("Reanudar acciones" if paused else "Pausar nuevas acciones")
         selected = self.platform.currentData()
         items = self.rt.chat_snapshot() if self.chat else self.rt.action_snapshot()
         items = tuple(item for item in items if selected is None or item.platform == selected)
@@ -139,10 +193,17 @@ class SessionPanel(QWidget):
                     "Para mostrarlo en OBS, copia la URL en Overlays → Chat multiplataforma y marca "
                     "«Actualizar el navegador cuando la escena se active» en la fuente Navegador.")
         else:
+            selected_run = self._selected_run()
+            self._runs = tuple(sorted(items, key=lambda run: run.id, reverse=True))
             rows = [(_clock(run.at), run.action, run.origin, f"{run.platform}/{run.event}",
                      run.state + (f" ({run.failures})" if run.failures else ""),
-                     "…" if run.duration_ms is None else f"{run.duration_ms} ms")
-                    for run in sorted(items, key=lambda run: run.id, reverse=True)]
-            text = "El historial se conserva durante esta sesión. Consulta Registro para ver el detalle de un error."
+                     "—" if run.duration_ms is None else f"{run.duration_ms} ms", run.queue or "Paralela") for run in self._runs]
+            text = ("Pausar detiene el inicio de nuevas acciones, no las que ya empezaron. "
+                    "Cancelar no deshace pasos ya ejecutados. Solo se conserva el historial de esta sesión.")
         self.notice.setText(text if rows else "Todavía no hay resultados para este filtro. " + text)
-        ActionWorkspace._fill(self.table, rows, tooltips=False)
+        selected_row = -1
+        if not self.chat and selected_run is not None:
+            selected_row = next((i for i, run in enumerate(self._runs) if run.id == selected_run.id), -1)
+        ActionWorkspace._fill(self.table, rows, selected_row, tooltips=False)
+        if not self.chat:
+            self._update_cancel_button()

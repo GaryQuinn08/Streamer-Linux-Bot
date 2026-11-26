@@ -28,6 +28,11 @@
     return ["1", "true", "yes", "si", "on"].includes(String(param(key, String(fallback))).toLowerCase());
   }
 
+  // A source may hide a message; the separate "badges" preference only hides its label.
+  function acceptsMessages(platform) {
+    return platforms.has(platform) && enabled(platform);
+  }
+
   function colorParam(key, fallback) {
     const value = param(key, fallback);
     return /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
@@ -87,7 +92,7 @@
     root.setProperty("--chat-size", clamp("size", 22, 12, 60) + "px");
     root.setProperty("--chat-opacity", clamp("opacity", 78, 0, 100) / 100);
     for (const [row, entry] of rows) {
-      if (!enabled(row.dataset.platform)) remove(row);
+      if (!acceptsMessages(row.dataset.platform)) remove(row);
       else {
         updateLabels(entry);
         if (duration !== previousDuration) schedule(row, entry);
@@ -107,8 +112,8 @@
       return;
     }
     if (message.channel !== "chat" || typeof message.text !== "string") return;
+    if (!acceptsMessages(message.platform)) return;
     const platform = platforms.get(message.platform);
-    if (!platform || !enabled(message.platform)) return;
     const row = document.createElement("li");
     row.className = "message";
     row.dataset.platform = message.platform;

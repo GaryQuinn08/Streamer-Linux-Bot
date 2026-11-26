@@ -500,6 +500,8 @@ class _ColorButton(QPushButton):
 
 
 class OverlaysTab(QWidget):
+    _CHAT_PLATFORMS = ("twitch", "tiktok", "youtube", "kick")
+
     def __init__(self, runtime: Runtime, bridge: LogBridge) -> None:
         super().__init__()
         self.rt = runtime
@@ -507,6 +509,8 @@ class OverlaysTab(QWidget):
         self._info: OverlayInfo | None = None
         self._values: dict[str, str] = {}
         self._defaults: dict[str, str] = {}
+        self._chat_controls: dict[str, QCheckBox] = {}
+        self._chat_recovery: QWidget | None = None
         self._deleting: str | None = None
 
         root = QHBoxLayout(self)
@@ -563,7 +567,7 @@ class OverlaysTab(QWidget):
         self.output_scope = QWidget()
         scope_row = QHBoxLayout(self.output_scope)
         scope_row.setContentsMargins(0, 0, 0, 0)
-        scope_row.addWidget(QLabel("Plataforma de este enlace:"))
+        scope_row.addWidget(QLabel("Mensajes incluidos por este enlace:"))
         self.scope = QComboBox()
         self.scope.setObjectName("chatOverlayScope")
         for label, platform in (
@@ -690,6 +694,7 @@ class OverlaysTab(QWidget):
                 "OBS: al pegar esta URL en las propiedades de la fuente Navegador, marca "
                 "«Actualizar el navegador cuando la escena se active». "
                 "Al recargarse, la fuente empieza sin los mensajes anteriores. "
+                "Para quitar los nombres de plataforma sin dejar de mostrar mensajes, desmarca las etiquetas y guarda. "
                 "Si emites simultáneamente en Twitch, usa Solo Twitch en la fuente pública y deja el multichat en privado."
             )
         else:
@@ -710,6 +715,8 @@ class OverlaysTab(QWidget):
         self._update_url()
 
     def _build_form(self, info: OverlayInfo) -> None:
+        self._chat_controls.clear()
+        self._chat_recovery = None
         while self.form.rowCount():
             self.form.removeRow(0)
         self._values.clear()
@@ -718,6 +725,20 @@ class OverlaysTab(QWidget):
         saved = presets.get(info.id, {}) if isinstance(presets, dict) else {}
         if not isinstance(saved, dict):
             saved = {}
+        sources = None
+        if info.id == "multi-chat":
+            visual = QLabel("Apariencia del chat para el público")
+            visual.setStyleSheet("font-weight: bold;")
+            self.form.addRow(visual)
+            group = QGroupBox("Fuentes: qué mensajes aparecen")
+            inner = QFormLayout(group)
+            explanation = QLabel(
+                "Desactivar una fuente quita sus mensajes, no solo su etiqueta. "
+                "Un enlace «Solo Twitch», «Solo TikTok», etc. mantiene su propio filtro."
+            )
+            explanation.setWordWrap(True)
+            inner.addRow(explanation)
+            sources = (group, inner)
         for p in info.params:
             key = p["key"]
             default = p.get("default", p.get("min", 0) if p["type"] == "number" else "")
@@ -735,15 +756,54 @@ class OverlaysTab(QWidget):
             self._values[key] = self._to_text(value)
             label = QLabel(str(p.get("label", key)))
             label.setTextFormat(Qt.PlainText)
-            self.form.addRow(label, self._make_widget(p, value))
+            widget = self._make_widget(p, value)
+            if sources and key in (*self._CHAT_PLATFORMS, "badges"):
+                self._chat_controls[key] = widget
+                widget.setObjectName(f"chat-appearance-{key}")
+                label.setWordWrap(True)
+                label.setBuddy(widget)
+                (sources[1] if key in self._CHAT_PLATFORMS else self.form).addRow(label, widget)
+            else:
+                self.form.addRow(label, widget)
+        if sources:
+            group, inner = sources
+            recovery = QWidget()
+            recovery.setObjectName("chat-appearance-recovery")
+            recovery_layout = QVBoxLayout(recovery)
+            recovery_layout.setContentsMargins(0, 0, 0, 0)
+            warning = QLabel(
+                "No hay ninguna fuente activa para el enlace general. Si quieres recuperar los chats sin mostrar "
+                "de dónde vienen, incluye las cuatro fuentes y oculta las etiquetas. El filtro de un enlace "
+                "individual no cambia."
+            )
+            warning.setWordWrap(True)
+            recover = QPushButton("Incluir las cuatro fuentes y ocultar etiquetas")
+            recover.setObjectName("recover-chat-without-labels")
+            recover.clicked.connect(self._restore_unlabeled_chat)
+            recovery_layout.addWidget(warning)
+            recovery_layout.addWidget(recover, alignment=Qt.AlignmentFlag.AlignLeft)
+            self.form.insertRow(1, recovery)
+            self._chat_recovery = recovery
+            self.form.addRow(group)
+            self._update_chat_recovery()
         self._refresh_preview()
+
+    def _update_chat_recovery(self) -> None:
+        if self._chat_recovery:
+            self._chat_recovery.setVisible(not any(self._values.get(key) == "true" for key in self._CHAT_PLATFORMS))
+
+    def _restore_unlabeled_chat(self) -> None:
+        for key in self._CHAT_PLATFORMS:
+            self._chat_controls[key].setChecked(True)
+        self._chat_controls["badges"].setChecked(False)
+        self.status.setText("Pulsa Guardar apariencia para recuperar el chat sin etiquetas en tu enlace actual.")
 
     def _refresh_preview(self) -> None:
         if self._info is None:
             return
         values = self._values
         if self._info.id == "multi-chat" and (selected := self.scope.currentData()):
-            values = {**values, **{key: self._to_text(key == selected) for key in ("twitch", "tiktok", "youtube", "kick")}}
+            values = {**values, **{key: self._to_text(key == selected) for key in self._CHAT_PLATFORMS}}
         self.preview.set_overlay(self._info, values)
         self.play_preview.setVisible(self.preview.can_play)
         self.play_exit.setVisible(self.preview.can_exit)
@@ -763,6 +823,7 @@ class OverlaysTab(QWidget):
 
     def _set_value(self, key: str, value) -> None:
         self._values[key] = self._to_text(value)
+        self._update_chat_recovery()
         self.status.setText("Cambios sin guardar.")
         self._refresh_preview()
 
@@ -817,7 +878,7 @@ class OverlaysTab(QWidget):
         self.dock_group.setVisible(multichat)
         url = f"http://127.0.0.1:{port}/overlay/{self._info.id}/" if ready else ""
         if url and multichat and (selected := self.scope.currentData()):
-            url += "?" + urlencode({key: self._to_text(key == selected) for key in ("twitch", "tiktok", "youtube", "kick")})
+            url += "?" + urlencode({key: self._to_text(key == selected) for key in self._CHAT_PLATFORMS})
         self.url.setText(url)
         self.url.setPlaceholderText("Asigna un puerto desde Inicio para generar la URL.")
         dock_ready = bool(multichat and self._chat_dock_url())

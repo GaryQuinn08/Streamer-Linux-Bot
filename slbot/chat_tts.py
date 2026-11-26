@@ -20,13 +20,14 @@ TTS_PLATFORMS = ("twitch", "tiktok", "youtube", "kick")
 _ALLOWED = frozenset(TTS_PLATFORMS)
 _MAX_PENDING = 8
 _MAX_TEXT = 160
+_MAX_AUTHOR = 40
 _MAX_AGE = 25
 _MAX_RECENT = 300
 _USER_COOLDOWN = 5
 _REPEAT_COOLDOWN = 20
 _VOICE_TIMEOUT = 45
 _ERROR_INTERVAL = 30
-_SAMPLE = "Hola. Esta es la voz que leerá los mensajes de tu chat."
+_SAMPLE = "Luna dice: ¡Hola! Así sonarán los mensajes de tu chat."
 # No links, including common bare domains, and no leading slash/bang commands.
 _LINK = re.compile(
     r"(?:\b[a-z][a-z0-9+.-]{1,22}://|\bmailto:|\bwww\.|(?<!\w)[\w-]+(?:\.[\w-]+)*\.[a-z]{2,63}\b"
@@ -36,6 +37,7 @@ _LINK = re.compile(
 _COMMAND = re.compile(r"^[!/]+\s*[\w!?/]", re.UNICODE)
 _SPAM = re.compile(r"(\w)\1{7,}", re.IGNORECASE)
 _MARKUP = re.compile(r"</?[A-Za-z][^>]{0,140}>")
+_AUTHOR_UNSAFE = re.compile(r"[<>:/\\?#=&]|^www\.", re.IGNORECASE)
 _STOPPED = "Se detuvo la prueba de voz."
 
 
@@ -93,6 +95,23 @@ def _speech_text(raw: object) -> str | None:
     return value
 
 
+def _spoken_author(name: str) -> str:
+    # Avoid letting a display name masquerade as markup, an address or an
+    # announcement. Dots and underscores are valid in handles: read as pauses.
+    if _AUTHOR_UNSAFE.search(name) or _COMMAND.match(name) or _SPAM.search(name):
+        return "Alguien"
+    plain = "".join(char if char.isspace() or unicodedata.category(char)[0] in "LMN"
+                    or char in "'’" else " " for char in name)
+    plain = " ".join(plain.split()).strip("'’ ")
+    if not any(char.isalnum() for char in plain):
+        return "Alguien"
+    if len(plain) > _MAX_AUTHOR:
+        shortened = plain[:_MAX_AUTHOR]
+        boundary = shortened.rfind(" ")
+        plain = shortened[:boundary] if boundary >= _MAX_AUTHOR // 2 else shortened
+    return plain.rstrip("'’ ")
+
+
 @dataclass(frozen=True)
 class _Speech:
     message: str
@@ -129,7 +148,8 @@ class ChatTts:
         if value is None:
             return
         now = asyncio.get_running_loop().time()
-        actor = _normalize(event.user[:120]).casefold() if isinstance(event.user, str) else ""
+        display_name = _normalize(event.user[:120]) if isinstance(event.user, str) else ""
+        actor = display_name.casefold()
         author = (event.platform, actor)
         duplicate = value.casefold().rstrip("!?.,… ")
         if ((actor and self._recent_users.get(author, -float("inf")) + _USER_COOLDOWN > now)
@@ -138,7 +158,7 @@ class ChatTts:
         if actor:
             self._remember(self._recent_users, author, now)
         self._remember(self._recent_text, duplicate, now)
-        self._enqueue(_Speech(value, queued_at=now))
+        self._enqueue(_Speech(f"{_spoken_author(display_name)} dice: {value}", queued_at=now))
 
     @staticmethod
     def _remember(cache: OrderedDict, key, now: float) -> None:

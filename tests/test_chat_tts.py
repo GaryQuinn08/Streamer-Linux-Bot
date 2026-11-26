@@ -50,7 +50,7 @@ class ChatTtsRuntimeTests(unittest.IsolatedAsyncioTestCase):
                 await self.rt.bus.publish(chat(source, "Viewer", f"Saludos desde {source}"))
             await self.drain()
             self.assertEqual([args.args[1] for args in voice.await_args_list],
-                             [f"Saludos desde {key}" for key in ("kick", "twitch", "youtube", "tiktok")])
+                             [f"Viewer dice: Saludos desde {key}" for key in ("kick", "twitch", "youtube", "tiktok")])
             await self.rt.configure_chat_tts(True, ["youtube"])
             await self.rt.bus.publish(chat("kick", "Kick", "Esto ya no se oye"))
             await self.rt.bus.publish(chat("youtube", "YouTube", "Uno solo puede hablar"))
@@ -81,9 +81,38 @@ class ChatTtsRuntimeTests(unittest.IsolatedAsyncioTestCase):
             for event in data:
                 await self.rt.bus.publish(event)
             await self.drain()
-            self.assertEqual([args.args[1] for args in voice.await_args_list], ["¡Buen directo!", "Qué buen día"])
+            self.assertEqual([args.args[1] for args in voice.await_args_list], ["ok dice: ¡Buen directo!", "other dice: Qué buen día"])
             self.assertEqual(len(self.rt.chat_snapshot()), len(data) - 1)
             self.assertTrue(self.rt.chat_snapshot()[0].simulated)
+
+    async def test_speaks_display_name_safely_and_falls_back_without_dropping_messages(self):
+        voice = AsyncMock()
+        with patch("slbot.audio._say", voice):
+            await self.rt.configure_chat_tts(True, ["tiktok", "youtube"])
+            long_author = "abcdefghijklmnopqrstuvxyz0123456789 " * 3
+            inputs = [
+                ("tiktok", "@María.José_08 ✨", "¿Ya empezó el directo?"),
+                ("youtube", "", "Saludos sin nombre"),
+                ("youtube", "https://example.org/<em>", "Mensaje con autor no utilizable"),
+                ("youtube", "✨ ⁠", "Sin letras en el nombre"),
+                ("youtube", long_author, "Texto " * 43),
+            ]
+            for platform, name, text in inputs:
+                await self.rt.bus.publish(chat(platform, name, text))
+            await self.drain()
+        said = [args.args[1] for args in voice.await_args_list]
+        self.assertEqual(said[:4], [
+            "María José 08 dice: ¿Ya empezó el directo?",
+            "Alguien dice: Saludos sin nombre",
+            "Alguien dice: Mensaje con autor no utilizable",
+            "Alguien dice: Sin letras en el nombre",
+        ])
+        author, separator, message = said[4].partition(" dice: ")
+        self.assertEqual(separator, " dice: ")
+        self.assertLessEqual(len(author), 40)
+        self.assertLessEqual(len(message), 160)
+        self.assertTrue(message.endswith("…"))
+        self.assertEqual([line.user for line in self.rt.chat_snapshot()], [name for _, name, _ in inputs])
 
     async def test_fifo_is_bounded_and_clear_cancels_current_without_disabling(self):
         speaks, started, release = [], asyncio.Event(), asyncio.Event()
@@ -99,11 +128,11 @@ class ChatTtsRuntimeTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.wait_for(started.wait(), 2)
             for i in range(16):
                 await self.rt.bus.publish(chat("twitch", f"viewer-{i}", f"Frase número {i}"))
-            self.assertEqual(speaks, ["Primera frase"])
+            self.assertEqual(speaks, ["first dice: Primera frase"])
             self.assertEqual(len(self.rt.chat_tts._pending), 8)
             release.set()
             await self.drain()
-            self.assertEqual(speaks, ["Primera frase"] + [f"Frase número {i}" for i in range(8)])
+            self.assertEqual(speaks, ["first dice: Primera frase"] + [f"viewer {i} dice: Frase número {i}" for i in range(8)])
             release.clear()
             started.clear()
             preview = asyncio.create_task(self.rt.preview_chat_tts())
@@ -118,12 +147,12 @@ class ChatTtsRuntimeTests(unittest.IsolatedAsyncioTestCase):
             release.set()
             await self.rt.bus.publish(chat("twitch", "fresh", "La lectura vuelve con un mensaje nuevo"))
             await self.drain()
-            self.assertEqual(speaks[-1], "La lectura vuelve con un mensaje nuevo")
+            self.assertEqual(speaks[-1], "fresh dice: La lectura vuelve con un mensaje nuevo")
 
     async def test_manual_preview_runs_while_automatic_off_and_reports_errors(self):
         with patch("slbot.audio._say", new_callable=AsyncMock) as voice:
             await self.rt.preview_chat_tts()
-            voice.assert_awaited_once()
+            voice.assert_awaited_once_with(self.rt, "Luna dice: ¡Hola! Así sonarán los mensajes de tu chat.")
             self.assertFalse(self.rt.chat_tts.settings.enabled)
             voice.side_effect = RuntimeError("do not reveal private message or process details")
             with self.assertRaisesRegex(RuntimeError, "no terminó"):
@@ -150,7 +179,7 @@ class ChatTtsRuntimeTests(unittest.IsolatedAsyncioTestCase):
             release.set()
             await asyncio.wait_for(active, 2)
             await self.drain()
-            self.assertEqual(spoken, ["Voz desde una acción", "Voz desde chat"])
+            self.assertEqual(spoken, ["Voz desde una acción", "waiting dice: Voz desde chat"])
 
     async def test_shutdown_cancels_speech_and_drops_pending(self):
         started, stopped = asyncio.Event(), asyncio.Event()

@@ -87,7 +87,17 @@ async def run_action(rt: "Runtime", action: Action, ev: Event) -> int:
         literal = {"play_sound": {"file"}, "music_queue_add": {"query"}}.get(str(step_type), set())
         params = {k: (v if k in literal else render(v, ctx)) for k, v in step.items() if k != "type"}
         try:
-            await handler(rt, params, ev)
+            if step_type in {"obs_scene", "obs_source_visible"}:
+                # OBS puede estar procesando una solicitud en un hilo. Mantenemos
+                # su bloqueo hasta recibir la respuesta antes de avanzar la cola.
+                request = asyncio.create_task(handler(rt, params, ev))
+                try:
+                    await asyncio.shield(request)
+                except asyncio.CancelledError:
+                    await asyncio.gather(request, return_exceptions=True)
+                    raise
+            else:
+                await handler(rt, params, ev)
         except Exception as exc:  # un paso que falla no cancela los siguientes
             failures += 1
             rt.log(f"[{action.name}] paso {index} ({step_type}) falló: {exc}")

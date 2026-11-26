@@ -6,7 +6,7 @@ Aplicación de escritorio para Linux que automatiza tu stream: recibe eventos
 (chat, seguidores, regalos, donaciones...), los pasa por **triggers** y ejecuta
 **acciones** (alertas en pantalla, cambios de escena en OBS, sonidos, TTS...).
 
-## Beta 10 para Linux
+## Beta 19 para Linux
 
 Instalación desde el repositorio sin ZIP ni dependencias de Qt de APT.
 Conserva el perfil de la beta anterior, incluido el catálogo y las alertas
@@ -26,6 +26,17 @@ Los mensajes reales duran 15 segundos por defecto; usa 0 si quieres
 que permanezcan hasta que los desplacen mensajes nuevos. En OBS, al pegar
 la URL en la fuente Navegador, marca **Actualizar el navegador cuando
 la escena se active** para que el chat se recargue al volver a la escena.
+
+En **Chat**, el TTS lee «[nombre] dice: [mensaje]» con la voz que ya elegiste.
+La insignia de plataforma en el overlay se puede ocultar sin apagar el chat
+ni modificar la URL de OBS. El filtrado de mensajes se configura por separado.
+
+En **Acciones** puedes asignar una cola con nombre, por ejemplo **Alertas**.
+Cada cola ejecuta una acción a la vez; sin nombre se conserva el modo paralelo.
+En **Historial** puedes pausar el inicio de nuevas acciones y cancelar una
+ejecución. Los disparadores admiten una espera por usuario; los de tipo
+`command` también admiten alias (por ejemplo `hola, saludo`).
+Consulta [cómo probar la automatización](docs/PARIDAD.md#automatización-beta-19).
 
 En **Temporizadores**, elige una acción existente, establece el intervalo en segundos
 y actívalo. La primera ejecución espera un intervalo completo; si la acción anterior

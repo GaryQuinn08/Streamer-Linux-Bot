@@ -1,4 +1,4 @@
-Streamer Linux Bot, beta 18
+Streamer Linux Bot, beta 19
 
 Requisitos: Linux, Python 3.11 o superior e Internet. En Mint, Debian o Ubuntu,
 si faltan dependencias del sistema:

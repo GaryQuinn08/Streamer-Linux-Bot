@@ -96,8 +96,13 @@ class TriggerForm(Form):
         self.cooldown.setRange(0, 86400)
         self.cooldown.setValue(data.get("cooldown_s", 0))
         self.cooldown.setSuffix(" s")
+        self.user_cooldown = QDoubleSpinBox()
+        self.user_cooldown.setRange(0, 86400)
+        self.user_cooldown.setValue(data.get("user_cooldown_s", 0))
+        self.user_cooldown.setSuffix(" s")
         for label, widget in (("Nombre", self.name), ("Activo", self.enabled), ("Plataforma (* = todas)", self.platform),
-                              ("Evento", self.event), ("Acción", self.action), ("Espera entre ejecuciones", self.cooldown)):
+                              ("Evento", self.event), ("Acción", self.action), ("Espera global", self.cooldown),
+                              ("Espera por usuario", self.user_cooldown)):
             self.form.addRow(label, widget)
         self.filters = {}
         for key, label in (("gift_name", "Regalo exacto"), ("user", "Usuario exacto"), ("contains", "Texto contiene"),
@@ -105,6 +110,10 @@ class TriggerForm(Form):
             value = data.get("filters", {}).get(key, "")
             self.filters[key] = QLineEdit(str(value))
             self.form.addRow(label, self.filters[key])
+        self.aliases = QLineEdit(", ".join(data.get("filters", {}).get("command_aliases", [])))
+        self.aliases.setMaxLength(850)
+        self.aliases.setPlaceholderText("Ej. hola, saludo, buenas")
+        self.form.addRow("Alias del comando", self.aliases)
         self.finish()
 
     def accept(self):
@@ -114,6 +123,19 @@ class TriggerForm(Form):
             filters.pop(key, None)
             if value:
                 filters[key] = value
+        aliases = list(dict.fromkeys(
+            value.strip().removeprefix("!").casefold() for value in self.aliases.text().split(",") if value.strip()
+        ))
+        event_type = self.event.currentText().strip()
+        filters.pop("command_aliases", None)
+        if aliases:
+            if event_type != "command" or len(aliases) > 20 or any(
+                not a or len(a) > 40 or a.startswith("!") or not a.isprintable() or any(c.isspace() for c in a)
+                for a in aliases
+            ):
+                QMessageBox.warning(self, "Alias", "Elige el evento command y escribe hasta 20 alias de una palabra.")
+                return
+            filters["command_aliases"] = aliases
         if "min_value" in filters:
             try:
                 value = float(filters["min_value"])
@@ -124,8 +146,9 @@ class TriggerForm(Form):
                 QMessageBox.warning(self, "Filtro", "Escribe un valor mínimo numérico y no negativo.")
                 return
         self.result_data = {**self.original, "name": self.name.text(), "enabled": self.enabled.isChecked(),
-                            "platform": self.platform.currentData(), "event_type": self.event.currentText().strip(),
-                            "action_id": self.action.currentData(), "cooldown_s": self.cooldown.value(), "filters": filters}
+                            "platform": self.platform.currentData(), "event_type": event_type,
+                            "action_id": self.action.currentData(), "cooldown_s": self.cooldown.value(),
+                            "user_cooldown_s": self.user_cooldown.value(), "filters": filters}
         super().accept()
 
 
@@ -205,6 +228,13 @@ class ActionForm(Form):
         self.original = data
         self.name = QLineEdit(data.get("name", ""))
         self.form.addRow("Nombre", self.name)
+        self.queue = QLineEdit(data.get("queue", ""))
+        self.queue.setMaxLength(40)
+        self.queue.setPlaceholderText("Vacía: en paralelo")
+        self.form.addRow("Cola", self.queue)
+        hint = QLabel("Las acciones con el mismo nombre de cola se ejecutan una por una, en orden.")
+        hint.setWordWrap(True)
+        self.form.addRow(hint)
         self.steps = [dict(s) for s in data.get("steps", [])]
         self.list = QListWidget()
         self.outer.addWidget(self.list)
@@ -250,7 +280,8 @@ class ActionForm(Form):
             self.refresh(i + delta)
 
     def accept(self):
-        self.result_data = {**self.original, "name": self.name.text(), "steps": self.steps}
+        self.result_data = {**self.original, "name": self.name.text(), "steps": self.steps,
+                            "queue": self.queue.text()}
         super().accept()
 
 
@@ -328,7 +359,7 @@ class RulesPanel(QWidget):
         action = self.selected()
         if action and QMessageBox.question(self, "Ejecutar acción",
                 "Se ejecutarán sus pasos reales, incluidos cambios de OBS o audio. ¿Continuar?") == QMessageBox.Yes:
-            self.send(run_action(self.rt, Action.from_dict(action.to_dict()), sample_event("gift")))
+            self.send(self.rt.schedule_action_test(Action.from_dict(action.to_dict()), sample_event("gift")))
 
 
 class ActionWorkspace(QWidget):
@@ -361,7 +392,7 @@ class ActionWorkspace(QWidget):
         self.filter.setClearButtonEnabled(True)
         self.filter.textChanged.connect(lambda _text: self.refresh())
         action_layout.addWidget(self.filter)
-        self.action_table = self._table(("Nombre",), "workbench-actions")
+        self.action_table = self._table(("Nombre", "Cola"), "workbench-actions")
         self.action_table.itemSelectionChanged.connect(self._action_changed)
         self.action_table.cellDoubleClicked.connect(lambda *_: self.edit_action())
         action_layout.addWidget(self.action_table, 1)
@@ -508,7 +539,7 @@ class ActionWorkspace(QWidget):
         self.actions = [a for a in values if not query or query in a.name.casefold()]
         found = next((i for i, a in enumerate(self.actions) if a.id == selected), None)
         row = found if found is not None else (0 if self.actions else -1)
-        self._fill(self.action_table, [(a.name,) for a in self.actions], row)
+        self._fill(self.action_table, [(a.name, a.queue or "Paralela") for a in self.actions], row)
         self.action_count.setText(f"{len(self.actions)} / {len(values)}" if query else str(len(values)))
         self._action_changed()
 
@@ -548,7 +579,7 @@ class ActionWorkspace(QWidget):
 
     def _send(self, coro, kind):
         self.setEnabled(False)
-        self.notice.setText("Guardando cambios…" if kind else "Ejecutando la prueba…")
+        self.notice.setText("Guardando cambios…" if kind else "Programando la prueba…")
         signal = self.completed
 
         def on_done(result):
@@ -559,7 +590,7 @@ class ActionWorkspace(QWidget):
 
     def _complete(self, kind, error):
         self.setEnabled(True)
-        self.notice.setText(error or ("Cambios guardados." if kind else "Prueba terminada. Abre Historial para ver el resultado."))
+        self.notice.setText(error or ("Cambios guardados." if kind else "Prueba programada. Abre Historial para ver su estado o cancelarla."))
         if not error and kind:
             self.changed.emit(kind)
 
@@ -644,4 +675,4 @@ class ActionWorkspace(QWidget):
     def test_action(self):
         if self.action and self._confirm("Esto ejecutará los pasos reales de la acción con un regalo simulado, "
                                          "incluidos cambios de OBS o audio. ¿Continuar?"):
-            self._send(self.rt.execute_action(Action.from_dict(self.action.to_dict()), sample_event("gift"), "Prueba manual"), "")
+            self._send(self.rt.schedule_action_test(Action.from_dict(self.action.to_dict()), sample_event("gift")), "")

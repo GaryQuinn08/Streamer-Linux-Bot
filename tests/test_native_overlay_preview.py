@@ -129,6 +129,45 @@ class NativePreviewTests(unittest.TestCase):
         self.assertFalse(self.tab.dock_group.isVisible())
         self.assertEqual(urlsplit(self.tab.url.text()).query, "")
 
+    def test_label_control_recovers_old_muted_chat_without_changing_copied_urls(self):
+        from PySide6.QtTest import QTest
+        from PySide6.QtWidgets import QCheckBox, QPushButton
+
+        self.runtime._port_override = 0
+        self.runtime.config.path = self.root / "config.json"
+        self.runtime.config.settings["overlay_presets"] = {"multi-chat": {
+            "twitch": "false", "youtube": "false", "kick": "false", "tiktok": "false",
+            "twitchColor": "#224499", "names": "false",
+        }}
+        self.runtime.start()
+        self.addCleanup(self.runtime.stop)
+        self.tab.refresh(select_id="multi-chat")
+        plain = self.tab.url.text()
+        self.tab.scope.setCurrentIndex(self.tab.scope.findData("twitch"))
+        twitch = self.tab.url.text()
+        self.tab.scope.setCurrentIndex(0)
+        self.app.processEvents()
+        badges = self.tab.findChild(QCheckBox, "chat-appearance-badges")
+        self.assertTrue(badges.isChecked())
+        recovery = self.tab.findChild(QPushButton, "recover-chat-without-labels")
+        self.assertTrue(recovery.isVisible())
+        recovery.click()
+        self.assertFalse(badges.isChecked())
+        for key in ("twitch", "tiktok", "youtube", "kick"):
+            self.assertTrue(self.tab.findChild(QCheckBox, f"chat-appearance-{key}").isChecked())
+        self.tab.save_btn.click()
+        for _ in range(100):
+            if "La fuente abierta" in self.tab.status.text():
+                break
+            QTest.qWait(10)
+        self.assertIn("La fuente abierta", self.tab.status.text())
+        self.assertEqual(Config.load(self.runtime.config.path).settings["overlay_presets"]["multi-chat"], {
+            "badges": "false", "twitchColor": "#224499", "names": "false",
+        })
+        self.assertEqual(self.tab.url.text(), plain)
+        self.tab.scope.setCurrentIndex(self.tab.scope.findData("twitch"))
+        self.assertEqual(self.tab.url.text(), twitch)
+
     def test_html_without_metadata_remains_external(self):
         source = self.root / "libre.html"
         source.write_text("<script>throw Error('do not run')</script>", encoding="utf-8")

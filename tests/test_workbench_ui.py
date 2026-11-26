@@ -130,6 +130,45 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(window.history_page.table.rowCount(), 1)
         self.assertIn(window.history_page.table.item(0, 4).text(), ("Completada", "En curso"))
 
+    def test_action_workspace_and_history_pause_and_cancel(self):
+        from PySide6.QtWidgets import QPushButton
+        from slbot.core.config import Action
+        from slbot.ui.main_window import LogBridge, MainWindow
+        from slbot.ui.rule_editor import ActionForm
+
+        action = Action("hold", "En espera manual", [{"type": "wait", "seconds": 90}])
+        form = ActionForm(None, action.to_dict())
+        self.addCleanup(form.close)
+        form.queue.setText("Alertas")
+        form.accept()
+        self.rt.submit(self.rt.edit_rule("action", form.result_data)).result(timeout=2)
+
+        window = MainWindow(self.rt, LogBridge())
+        self.addCleanup(window.close)
+        window.show()
+        window.findChild(QPushButton, "navigate-history").click()
+        panel = window.history_page
+        panel.pause_button.click()
+        self._wait_for(lambda: panel.pause_button.text() == "Reanudar acciones")
+
+        window.findChild(QPushButton, "navigate-actions").click()
+        view = window.pages.currentWidget()
+        view.filter.setText("En espera manual")
+        self.assertEqual(view.action_table.item(0, 1).text(), "Alertas")
+        with patch.object(view, "_confirm", return_value=True):
+            view.test_button.click()
+        self._wait_for(lambda: view.isEnabled() and "Prueba programada" in view.notice.text())
+        window.findChild(QPushButton, "navigate-history").click()
+        self._wait_for(lambda: panel.table.rowCount() == 1)
+        self.assertEqual(panel.table.item(0, 4).text(), "En espera")
+        self.assertEqual(panel.table.item(0, 6).text(), "Alertas")
+        panel.table.selectRow(0)
+        panel.cancel_button.click()
+        self._wait_for(lambda: panel.table.item(0, 4).text() == "Cancelada")
+        self.assertFalse(panel.cancel_button.isEnabled())
+        panel.pause_button.click()
+        self._wait_for(lambda: panel.pause_button.text() == "Pausar nuevas acciones")
+
     def test_twitch_composer_only_sends_manual_input_and_preserves_failed_draft(self):
         from unittest.mock import AsyncMock, PropertyMock
         from PySide6.QtCore import QCoreApplication, QEvent
