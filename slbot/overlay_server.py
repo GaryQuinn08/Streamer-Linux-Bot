@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import html
 import json
+import re
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, urlsplit
 
@@ -27,6 +28,8 @@ if TYPE_CHECKING:
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost"}
 CHAT_PLATFORMS = ("twitch", "youtube", "kick", "tiktok")
+MUSIC_REPORT_PATH = "/api/music/browser"
+_EXTENSION_ORIGIN = re.compile(r"chrome-extension://[a-p]{32}\Z")
 NOW_PLAYING_IDS = ("now-playing", "now-playing-spectrum")
 FEED_FIELDS = {
     "chat": ("text",),
@@ -59,6 +62,7 @@ class OverlayServer:
                 web.get("/sdk/overlay-sdk.js", self._sdk),
                 web.get(r"/sdk/{asset:now-playing\.(?:css|js)}", self._now_playing_asset),
                 web.get("/api/overlays", self._api_overlays),
+                web.post(MUSIC_REPORT_PATH, self._music_browser),
                 web.get("/overlay/{id}", self._redirect_slash),
                 web.get("/overlay/{id}/", self._overlay_file),
                 web.get("/overlay/{id}/{path:.+}", self._overlay_file),
@@ -172,12 +176,32 @@ class OverlayServer:
     async def _local_only(self, request: web.Request, handler):
         origin = request.headers.get("Origin")
         if origin and urlsplit(origin).hostname not in LOCAL_HOSTS:
-            return web.Response(status=403, text="Origin no permitido")
+            if not (request.path == MUSIC_REPORT_PATH and request.method == "POST"
+                    and _EXTENSION_ORIGIN.fullmatch(origin)):
+                return web.Response(status=403, text="Origin no permitido")
         if request.host.split(":")[0] not in LOCAL_HOSTS:
             return web.Response(status=403, text="Host no permitido")
         return await handler(request)
 
     # -- rutas -------------------------------------------------------------
+
+    async def _music_browser(self, request: web.Request) -> web.Response:
+        service = self.rt.now_playing
+        authorization = request.headers.get("Authorization", "")
+        if not service.authorizes(authorization):
+            return web.Response(status=403, headers=NO_STORE)
+        if request.content_type != "application/json" or request.content_length is None:
+            return web.Response(status=400, headers=NO_STORE)
+        if request.content_length > 4096:
+            return web.Response(status=413, headers=NO_STORE)
+        try:
+            async with asyncio.timeout(2):
+                body = await request.json()
+        except (ValueError, TimeoutError, RecursionError):
+            return web.Response(status=400, headers=NO_STORE)
+        if not isinstance(body, dict) or not await service.receive_browser(body, authorization):
+            return web.Response(status=400, headers=NO_STORE)
+        return web.Response(status=204, headers=NO_STORE)
 
     async def _index(self, request: web.Request) -> web.Response:
         rows = "".join(

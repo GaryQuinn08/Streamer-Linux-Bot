@@ -4,16 +4,28 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import secrets
 import shutil
 import sys
 import unicodedata
 from dataclasses import dataclass
 
 CONFIG_KEY = "now_playing"
-BOT_SOURCE = "bot"
+# Provider selection is explicit. A generic browser or local file is not a provider.
+PROVIDERS = {
+    "spotify": ("Spotify web", "https://open.spotify.com/"),
+    "youtube": ("YouTube Music", "https://music.youtube.com/"),
+    "amazon": ("Amazon Music", "https://music.amazon.com.mx/"),
+    "apple": ("Apple Music", "https://music.apple.com/"),
+    "deezer": ("Deezer", "https://www.deezer.com/"),
+    "tidal": ("TIDAL", "https://listen.tidal.com/"),
+}
+WEB_PREFIX = "web:"
 MPRIS_PREFIX = "org.mpris.MediaPlayer2."
 MPRIS_PATH = "/org/mpris/MediaPlayer2"
 MPRIS_PLAYER = MPRIS_PREFIX + "Player"
+SPOTIFY_DESKTOP = MPRIS_PREFIX + "spotify"
+WEB_TTL = 20.0
 _PLAYER = re.compile(r"(?:[A-Za-z_][A-Za-z0-9_-]*)(?:\.[A-Za-z0-9_-]+){0,5}\Z")
 _PRIVATE = re.compile(
     r"https?:|www\.|file:|spotify:|data:|ftp:|blob:|[A-Z][A-Z0-9+.-]*://|"
@@ -60,10 +72,10 @@ class NowPlayingSettings:
     def select(cls, enabled: bool, source) -> NowPlayingSettings:
         if enabled is not True:
             return cls()
-        if source == BOT_SOURCE or (isinstance(source, str) and source.startswith(MPRIS_PREFIX)
-                                    and _player_name(source[len(MPRIS_PREFIX):])):
+        if source == SPOTIFY_DESKTOP or (isinstance(source, str) and source.startswith(WEB_PREFIX)
+                                         and source[len(WEB_PREFIX):] in PROVIDERS):
             return cls(True, source)
-        raise ValueError("Elige un reproductor específico antes de activar Ahora suena.")
+        raise ValueError("Elige un servicio de música antes de activar Ahora suena.")
 
     def to_dict(self) -> dict:
         return {"enabled": self.enabled, "source": self.source}
@@ -173,6 +185,34 @@ class NowPlaying:
         self._track = Track()
         self._task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
+        self._token = secrets.token_urlsafe(32)
+        self._last_update = 0.0
+
+    def pairing_code(self, port):
+        if not port or not self.settings.enabled or not self.settings.source.startswith(WEB_PREFIX):
+            return ""
+        return f"{port}.{self._token}"
+
+    def authorizes(self, authorization: str) -> bool:
+        return (self.settings.enabled and self.settings.source.startswith(WEB_PREFIX)
+                and authorization.isascii() and secrets.compare_digest(authorization, "Bearer " + self._token))
+
+    async def receive_browser(self, payload: dict, authorization: str) -> bool:
+        async with self._lock:
+            if not self.authorizes(authorization):
+                return False
+            if set(payload) != {"provider", "state", "title", "artist"}:
+                return False
+            provider, state = payload["provider"], payload["state"]
+            if WEB_PREFIX + str(provider) != self.settings.source or state not in ("playing", "paused", "idle"):
+                return False
+            if not isinstance(payload["title"], str) or not isinstance(payload["artist"], str):
+                return False
+            title = clean_metadata(payload["title"], 110)
+            artist = clean_metadata(payload["artist"], 90)
+            self._last_update = asyncio.get_running_loop().time()
+            await self._publish(Track(state, title, artist, provider) if title and state != "idle" else Track())
+            return True
 
     def snapshot(self) -> dict[str, str]:
         return self._track.as_dict()
@@ -180,7 +220,10 @@ class NowPlaying:
     async def apply(self, settings: NowPlayingSettings) -> None:
         async with self._lock:
             await self._stop()
+            if settings != self.settings:
+                self._token = secrets.token_urlsafe(32)
             self.settings = settings
+            self._last_update = 0.0
             await self._publish(Track())
             if settings.enabled and not self.rt.editor_only:
                 self._task = asyncio.create_task(self._watch(settings.source))
@@ -203,10 +246,9 @@ class NowPlaying:
 
     async def _watch(self, source: str) -> None:
         while True:
-            if source == BOT_SOURCE:
-                title = clean_metadata(self.rt.music.now_playing_title, 110)
-                track = Track("playing", title, "", "Bot") if title else Track()
-            else:
-                track = await mpris_track(source)
-            await self._publish(track)
+            if source.startswith(WEB_PREFIX):
+                if asyncio.get_running_loop().time() - self._last_update > WEB_TTL:
+                    await self._publish(Track())
+            elif source == SPOTIFY_DESKTOP:
+                await self._publish(await mpris_track(source))
             await asyncio.sleep(self._interval)

@@ -1,13 +1,15 @@
 """Read-only music metadata: bounded input, selected source, opt-in lifecycle."""
 import asyncio
 from pathlib import Path
+
+import aiohttp
 from types import SimpleNamespace
 import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
 
 from slbot.core.config import Config
-from slbot.now_playing import (BOT_SOURCE, CONFIG_KEY, MPRIS_PREFIX, MPRIS_PLAYER,
+from slbot.now_playing import (SPOTIFY_DESKTOP, CONFIG_KEY, MPRIS_PREFIX, MPRIS_PLAYER,
                                NowPlaying, NowPlayingSettings, Track, _bus, available_players,
                                clean_metadata, mpris_track)
 from slbot.runtime import Runtime
@@ -58,34 +60,67 @@ class NowPlayingTests(unittest.IsolatedAsyncioTestCase):
             await service.apply(service.settings)
             await asyncio.sleep(0.02)
             read.assert_not_called()
-            await service.apply(NowPlayingSettings.select(True, PLAYER))
+            await service.apply(NowPlayingSettings.select(True, SPOTIFY_DESKTOP))
             await asyncio.sleep(0.03)
             self.assertEqual(service.snapshot(), received.as_dict())
-            self.assertTrue(all(call.args == (PLAYER,) for call in read.call_args_list))
+            self.assertTrue(all(call.args == (SPOTIFY_DESKTOP,) for call in read.call_args_list))
             self.assertEqual(rt.overlays.broadcast_now_playing.await_count, 1)
             await service.apply(NowPlayingSettings())
             self.assertEqual(service.snapshot(), Track().as_dict())
             self.assertEqual(rt.overlays.broadcast_now_playing.await_count, 2)
             await service.close()
 
-    async def test_runtime_profile_and_bot_music_snapshot(self):
+    async def test_revision_migrates_old_local_selection_and_rejects_unaffiliated_apps(self):
+        for source in ("bot", PLAYER, "web:imitation"):
+            self.assertEqual(NowPlayingSettings.from_config({CONFIG_KEY: {"enabled": True, "source": source}}),
+                             NowPlayingSettings())
+            with self.assertRaises(ValueError):
+                NowPlayingSettings.select(True, source)
+
+    async def test_extension_post_updates_both_overlays_only_with_correct_code_and_provider(self):
         with tempfile.TemporaryDirectory() as folder:
             config = Config.load(Path(folder) / "profile.json")
-            rt = Runtime(config=config)
-            rt.now_playing._interval = 0.01
-            stub = AsyncMock()
-            with patch.object(rt.overlays, "broadcast_now_playing", stub, create=True):
-                self.assertFalse(rt.now_playing.settings.enabled)
-                rt.music.now_playing_title = "Cielo claro"
-                await rt.configure_now_playing(True, BOT_SOURCE)
-                await asyncio.sleep(0.02)
-                self.assertEqual(rt.now_playing.snapshot(), Track("playing", "Cielo claro", "", "Bot").as_dict())
+            rt = Runtime(config=config, port=0)
+            await rt._startup()
+            try:
+                self.assertEqual(rt.now_playing.pairing_code(rt.port), "")
+                await rt.configure_now_playing(True, "web:youtube")
+                code = rt.now_playing.pairing_code(rt.port)
+                port, token = code.split(".")
+                self.assertEqual(int(port), rt.port)
+                self.assertNotIn(token, config.path.read_text())
                 self.assertEqual(Config.load(config.path).settings[CONFIG_KEY],
-                                 {"enabled": True, "source": BOT_SOURCE})
-                await rt.configure_now_playing(False, BOT_SOURCE)
-                self.assertEqual(rt.now_playing.snapshot(), Track().as_dict())
-                self.assertEqual(stub.await_count, 2)
-                await rt.now_playing.close()
+                                 {"enabled": True, "source": "web:youtube"})
+                base = f"http://127.0.0.1:{rt.port}"
+                headers = {"Authorization": "Bearer " + token, "Origin": "chrome-extension://" + "a" * 32}
+                body = {"state": "playing", "title": "Cielo claro", "artist": "Luna", "provider": "youtube"}
+                async with aiohttp.ClientSession() as session:
+                    async with session.ws_connect(base + "/ws/now-playing") as vinyl, session.ws_connect(
+                        base + "/ws/now-playing-spectrum") as neon:
+                        for socket in (vinyl, neon):
+                            await socket.receive_json(timeout=1)
+                            self.assertEqual((await socket.receive_json(timeout=1))["channel"], "now-playing-settings")
+                            self.assertEqual((await socket.receive_json(timeout=1))["state"], "idle")
+                        for status, request_headers, payload in (
+                            (403, {**headers, "Origin": "https://music.youtube.com"}, body),
+                            (403, {**headers, "Authorization": "Bearer wrong"}, body),
+                            (400, headers, {**body, "provider": "amazon"}),
+                            (400, headers, {**body, "url": "https://music.youtube.com"}),
+                            (204, headers, body),
+                        ):
+                            async with session.post(base + "/api/music/browser", json=payload, headers=request_headers) as response:
+                                self.assertEqual(response.status, status)
+                        for socket in (vinyl, neon):
+                            self.assertEqual(await socket.receive_json(timeout=1), {
+                                "channel": "now-playing", "state": "playing", "title": "Cielo claro", "artist": "Luna",
+                            })
+                        await rt.configure_now_playing(True, "web:amazon")
+                        self.assertNotEqual(rt.now_playing.pairing_code(rt.port), code)
+                        self.assertEqual((await vinyl.receive_json(timeout=1))["state"], "idle")
+                        async with session.post(base + "/api/music/browser", json=body, headers=headers) as response:
+                            self.assertEqual(response.status, 403)
+            finally:
+                await rt._shutdown()
 
     async def test_bus_subprocess_bounds_and_malformed_output(self):
         with tempfile.TemporaryDirectory() as folder:

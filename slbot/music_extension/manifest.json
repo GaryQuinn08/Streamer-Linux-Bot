@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Ahora suena · Streamer Linux Bot",
+  "version": "0.2.0",
+  "description": "Comparte título y artista de la pestaña de música que elijas con el bot local.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["http://127.0.0.1/*"],
+  "background": {"service_worker": "worker.js", "type": "module"},
+  "action": {"default_popup": "popup.html"}
+}

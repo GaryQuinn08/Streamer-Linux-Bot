@@ -8,19 +8,19 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
+    QApplication, QCheckBox, QComboBox, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
     QListWidget, QListWidgetItem, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from ..connectors.oauth import deployment_setting
-from ..now_playing import BOT_SOURCE, MPRIS_PREFIX, available_players
+from ..now_playing import PROVIDERS, SPOTIFY_DESKTOP, WEB_PREFIX
+from ..paths import PACKAGE_DIR
 from .deletion import confirm_delete, delete_shortcut
 
 
 class MusicPanel(QWidget):
     open_requested = Signal(str, object)
     operation_done = Signal(str)
-    players_found = Signal(object)
 
     def __init__(self, rt) -> None:
         super().__init__()
@@ -41,28 +41,37 @@ class MusicPanel(QWidget):
         now = QGroupBox("Ahora suena · información para overlays")
         block = QVBoxLayout(now)
         notice = QLabel(
-            "Comparte solo título, artista y estado; no conecta cuentas ni transmite el audio. "
-            "Si eliges un navegador, puede mostrar los títulos de videos o pestañas privadas. "
-            "Usa un reproductor dedicado para evitar mostrarlos."
+            "Elige Spotify de escritorio o un servicio web. Los overlays solo muestran título, artista y estado; "
+            "no capturan audio ni acceden a la cuenta. La extensión solo lee la pestaña que tú elijas."
         )
         notice.setWordWrap(True)
         block.addWidget(notice)
-        self.share_now = QCheckBox("Mostrar el tema del reproductor elegido en mis overlays")
+        self.share_now = QCheckBox("Mostrar la canción del servicio elegido en mis overlays")
         self.share_now.setChecked(rt.now_playing.settings.enabled)
         self.share_now.toggled.connect(lambda _checked: self.refresh())
         block.addWidget(self.share_now)
         row = QHBoxLayout()
         self.player = QComboBox()
-        self.player.setAccessibleName("Reproductor que se mostrará en los overlays")
+        self.player.setAccessibleName("Servicio de música que se mostrará en los overlays")
         self.player.currentIndexChanged.connect(lambda _index: self.refresh())
         row.addWidget(self.player, stretch=1)
-        self.find_players = QPushButton("Buscar reproductores")
-        self.find_players.clicked.connect(self._search_players)
-        row.addWidget(self.find_players)
         self.save_player = QPushButton("Guardar Ahora suena")
         self.save_player.clicked.connect(self._save_player)
         row.addWidget(self.save_player)
         block.addLayout(row)
+        self.web_actions = QWidget()
+        web_row = QHBoxLayout(self.web_actions)
+        web_row.setContentsMargins(0, 0, 0, 0)
+        self.open_service = QPushButton("Abrir servicio")
+        self.open_service.clicked.connect(self._open_service)
+        web_row.addWidget(self.open_service)
+        ext = QPushButton("Abrir carpeta de extensión")
+        ext.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(PACKAGE_DIR / "music_extension"))))
+        web_row.addWidget(ext)
+        self.copy_pair = QPushButton("Copiar código")
+        self.copy_pair.clicked.connect(self._copy_pair)
+        web_row.addWidget(self.copy_pair)
+        block.addWidget(self.web_actions)
         self.now_status = QLabel()
         self.now_status.setTextFormat(Qt.TextFormat.PlainText)
         self.now_status.setWordWrap(True)
@@ -71,7 +80,6 @@ class MusicPanel(QWidget):
         self.player_status.setWordWrap(True)
         block.addWidget(self.player_status)
         outer.addWidget(now)
-        self.players_found.connect(self._populate_players)
 
         spotify = QGroupBox("Spotify · escucha privada")
         block = QVBoxLayout(spotify)
@@ -159,7 +167,7 @@ class MusicPanel(QWidget):
         timer = QTimer(self)
         timer.timeout.connect(self.refresh)
         timer.start(300)
-        self._populate_players(None)
+        self._populate_players()
         self.refresh()
 
     def refresh(self):
@@ -168,10 +176,20 @@ class MusicPanel(QWidget):
                                         (not self.share_now.isChecked() or bool(self.player.currentData())))
         selection = self.rt.now_playing.settings
         snapshot = self.rt.now_playing.snapshot()
+        selected = self.player.currentData() or ""
+        self.web_actions.setVisible(selected.startswith(WEB_PREFIX))
+        self.copy_pair.setEnabled(bool(selection.source == selected and self.rt.now_playing.pairing_code(self.rt.port)))
+        if selected.startswith(WEB_PREFIX):
+            hint = ("En Brave/Chromium/Chrome, abre Extensiones, activa el modo desarrollador y carga la carpeta "
+                    "sin empaquetar. Guarda esta fuente, copia el código y pulsa «Compartir esta pestaña» en la extensión.")
+        else:
+            hint = "Spotify de escritorio se detecta sin extensión mientras su app Linux está reproduciendo."
+        if self.player_status.text() != hint:
+            self.player_status.setText(hint)
         if not selection.enabled:
             self.now_status.setText("No se comparte información.")
         elif not snapshot["title"]:
-            self.now_status.setText("Activado · esperando una pista del reproductor seleccionado.")
+            self.now_status.setText("Activado · esperando una canción de ese servicio.")
         else:
             label = "En pausa" if snapshot["state"] == "paused" else "Reproduciendo"
             artist = f' · {snapshot["artist"]}' if snapshot["artist"] else ""
@@ -201,38 +219,27 @@ class MusicPanel(QWidget):
         error = self.rt.music.last_error
         self.local_status.setText(f"{current} · {len(rows)} en cola" + (f" · {error}" if error else ""))
 
-    def _populate_players(self, players):
-        selected = self.player.currentData() or self.rt.now_playing.settings.source
-        names = set(players or ())
-        if selected and selected.startswith(MPRIS_PREFIX):
-            names.add(selected)
+    def _populate_players(self):
+        selected = self.rt.now_playing.settings.source
         self.player.blockSignals(True)
         self.player.clear()
-        self.player.addItem("Elige un reproductor…", "")
-        self.player.addItem("Cola de audio de Streamer Linux Bot (mpv)", BOT_SOURCE)
-        for name in sorted(names):
-            label = name.removeprefix(MPRIS_PREFIX)
-            if players is not None and name not in players:
-                label += " (no detectado)"
-            self.player.addItem(label, name)
-        index = self.player.findData(selected)
-        self.player.setCurrentIndex(max(index, 0))
+        self.player.addItem("Elige un servicio…", "")
+        self.player.addItem("Spotify de escritorio (Linux)", SPOTIFY_DESKTOP)
+        for key, (label, _url) in PROVIDERS.items():
+            self.player.addItem(label, WEB_PREFIX + key)
+        self.player.setCurrentIndex(max(self.player.findData(selected), 0))
         self.player.blockSignals(False)
-        if players is not None:
-            self.player_status.setText(
-                "" if players else "No se detectaron reproductores externos. Reproduce algo en la misma sesión de Linux y vuelve a buscar."
-            )
-        self.find_players.setEnabled(True)
-        self.refresh()
 
-    def _search_players(self):
-        self.find_players.setEnabled(False)
-        self.player_status.setText("Buscando reproductores en esta sesión de Linux…")
+    def _open_service(self):
+        service = (self.player.currentData() or "").removeprefix(WEB_PREFIX)
+        if service in PROVIDERS:
+            QDesktopServices.openUrl(QUrl(PROVIDERS[service][1]))
 
-        async def search():
-            self.players_found.emit(await available_players())
-
-        self.rt.submit(search())
+    def _copy_pair(self):
+        code = self.rt.now_playing.pairing_code(self.rt.port)
+        if code and self.copy_pair.isEnabled():
+            QApplication.clipboard().setText(code)
+            self.result.setText("Código copiado. Pégalo solo en la extensión Ahora suena.")
 
     def _save_player(self):
         if self.save_player.isEnabled():

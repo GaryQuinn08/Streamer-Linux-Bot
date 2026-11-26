@@ -6,7 +6,7 @@ Aplicación de escritorio para Linux que automatiza tu stream: recibe eventos
 (chat, seguidores, regalos, donaciones...), los pasa por **triggers** y ejecuta
 **acciones** (alertas en pantalla, cambios de escena en OBS, sonidos, TTS...).
 
-## Beta 21 para Linux
+## Beta 22 para Linux
 
 Instalación desde el repositorio sin ZIP ni dependencias de Qt de APT.
 Conserva el perfil de la beta anterior, incluido el catálogo y las alertas
@@ -60,11 +60,11 @@ activar o desactivar un filtro y reiniciar una fuente multimedia. Desde
 **Acciones** también puedes exportar/importar un paquete de acciones nativo;
 los disparadores importados se quedan desactivados hasta que tú los actives.
 
-**Música → Ahora suena** permite elegir un reproductor Linux compatible,
-además de la cola local. Muestra la pista y el artista en un overlay para OBS
-o LIVE Studio: **Vinilo nocturno** y **Espectro neón**. Es solo información
-de la pista; no convierte el audio de un servicio en audio autorizado para
-el directo. [Cómo conectarlo y qué admite](docs/AUDIO.md#mostrar-qué-está-sonando-en-obs-o-live-studio).
+**Música → Ahora suena** está dedicado a servicios: Spotify de escritorio,
+Spotify web, YouTube Music, Amazon Music, Apple Music, Deezer y TIDAL.
+Los servicios web usan la extensión incluida, solo en la pestaña que elijas.
+Muestra título y artista en OBS o LIVE Studio con **Vinilo nocturno** o
+**Espectro neón**. No captura audio ni usa archivos locales como fuente. [Cómo conectarlo y qué admite](docs/AUDIO.md#mostrar-qué-está-sonando-en-obs-o-live-studio).
 
 ### Editor web y galería
 

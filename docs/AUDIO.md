@@ -60,9 +60,8 @@ una canción (no una lista) en el bot. La música **no** sale por el bot,
 no participa en acciones, regalos o chat y no debe capturarse ni
 retransmitirse en OBS o LIVE Studio. Consulta las
 [condiciones de reproducción de Spotify](https://developer.spotify.com/documentation/web-api/reference/add-to-queue).
-YouTube Music, Apple Music y Amazon Music no tienen vinculación de cuenta ni
-cola dentro del bot. Pueden aportar el título a **Ahora suena** si su reproductor
-expone metadatos en Linux.
+Otros servicios no tienen inicio de sesión ni cola dentro del bot.
+Para mostrar su canción actual en el directo, usa **Ahora suena**.
 
 ## Voz natural en español de México
 
@@ -107,24 +106,42 @@ audio también se escuche en el directo.
 
 ## Mostrar qué está sonando en OBS o LIVE Studio
 
-Abre **Música → Ahora suena**. Empieza desactivado. Elige **Buscar reproductores**
-si quieres mostrar un reproductor externo que esté abierto, o selecciona la
-**Cola de audio de Streamer Linux Bot (mpv)**. Marca **Mostrar el tema del
-reproductor elegido en mis overlays** y guarda. En **Overlays** copia el enlace
-de **Ahora suena · Vinilo nocturno** o **Ahora suena · Espectro neón** a tu fuente de navegador.
+La beta 22 usa música de **Spotify, YouTube Music, Amazon Music, Apple Music,
+Deezer y TIDAL**. **Ahora suena** ya no ofrece la cola local ni detecta otros
+reproductores genéricos. Esto no elimina la cola de **Audio autorizado**,
+que sigue siendo independiente.
 
-En Linux, la búsqueda usa [MPRIS](https://specifications.freedesktop.org/mpris/latest/Player_Interface.html)
-en la misma sesión gráfica mediante [busctl](https://www.freedesktop.org/software/systemd/man/latest/busctl.html).
-Puede detectar Spotify de escritorio, un navegador con YouTube Music, Apple
-Music o Amazon Music, u otros reproductores si publican título y artista mediante
-MPRIS. Si no aparecen, inicia una pista y vuelve a buscar; el bot no accede a las
-cuentas ni puede forzar que un reproductor publique esos datos. Si el navegador
-cambia el nombre de su instancia al reiniciar, vuelve a seleccionarlo.
+**Spotify de escritorio en Linux:** en **Música → Ahora suena**, selecciona
+**Spotify de escritorio (Linux)**, activa la casilla y guarda. Reproduce una
+canción en la app de Spotify. El bot lee la pista por
+[MPRIS](https://specifications.freedesktop.org/mpris/latest/Player_Interface.html),
+sin autorización OAuth adicional. El dispositivo donde se reproduce el audio
+debe ser esa app, no otro dispositivo Spotify Connect.
 
-La función no descarga ni envía audio al directo y no sustituye la autorización
-para transmitirlo. Solo muestra título, artista y estado; no publica carátulas,
-enlaces ni rutas. La cola del bot muestra el nombre de archivo sin extensión
-(o «Audio autorizado» para los enlaces). Si eliges un navegador, podría mostrar
-títulos de otros videos o pestañas privadas: mejor usa un reproductor dedicado.
-Desmarca la opción y guarda para retirar la información del overlay. Un bot
-ejecutado en otro servidor no lee tu sesión gráfica de Linux.
+**Servicios web (Brave, Chromium o Chrome de escritorio):**
+
+1. En **Música → Ahora suena**, elige el servicio, activa la casilla y guarda.
+2. En el navegador, abre su página **Extensiones** (en Brave,
+   `brave://extensions`). Activa el **Modo desarrollador** y usa
+   **Cargar descomprimida**/**Cargar sin empaquetar**. Selecciona la carpeta
+   que abre **Abrir carpeta de extensión** en el bot (o
+   `slbot/music_extension` si instalaste desde un clon y prefieres su ruta).
+3. Pulsa **Abrir servicio** y pon una canción. Pulsa **Copiar código** en el
+   bot y, en la pestaña de música, abre la extensión **Ahora suena**. Pega el
+   código y pulsa **Compartir esta pestaña**. No compartas el código con nadie.
+   Si reinicias el bot, cambia su puerto o recargas esa pestaña, vuelve a enlazar.
+4. En **Overlays**, elige **Vinilo nocturno** o **Espectro neón** y añade
+   **la misma URL de fuente** a OBS o LIVE Studio. No necesitas cambiarla al
+   cambiar de servicio.
+
+Si la extensión se enlaza pero no aparece un título, reproduce una pista y
+verifica que la pestaña publique título y artista mediante
+[Media Session](https://developer.mozilla.org/en-US/docs/Web/API/MediaSession/metadata).
+No se adivinan títulos con otras pestañas ni se usan archivos o cuentas
+como alternativa. En esta entrega la extensión se prueba con metadatos
+simulados; el resultado en un servicio real depende de lo que envíe esa
+pestaña. Firefox no está soportado por esta extensión. Usa **Detener**
+en la extensión o desactiva la casilla en el bot para dejar de compartir.
+
+Solo se envía título, artista y estado al overlay local. No extrae audio,
+descarga canciones, accede a cuentas ni da autorización para retransmitir.
