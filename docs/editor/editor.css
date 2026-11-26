@@ -131,3 +131,14 @@ code { font-family: "Noto Sans Mono", "DejaVu Sans Mono", ui-monospace, monospac
   .variables { grid-column: auto; }
   .toolbar label { flex-basis: 100%; }
 }
+
+.adapter { margin-block-end: 16px; }
+.adapter summary { padding: 12px 16px; font-weight: 700; cursor: pointer; }
+.adapter-content { padding: 0 16px 14px; }
+.adapter-fields { display: grid; align-items: end; grid-template-columns: minmax(9rem, 1fr) minmax(13rem, 3fr) auto; gap: 10px; }
+.adapter-fields textarea, .adapter-fields select { margin-block-start: 3px; width: 100%; }
+#streamlabs-status[data-error="true"] { color: #ffadbb; }
+@media (max-width: 640px) {
+  .adapter-fields { grid-template-columns: 1fr; }
+  .adapter-fields button { justify-self: start; }
+}

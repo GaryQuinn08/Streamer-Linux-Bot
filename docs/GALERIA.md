@@ -6,11 +6,15 @@ muestra diseños revisados: no recibe archivos de forma automática ni ejecuta
 el HTML que suban otras personas.
 
 1. Crea tu diseño en el editor y comprueba que funcione con una muestra.
-2. Haz un fork y abre un pull request a la rama activa del proyecto con
+2. En el editor, pulsa **Proponer diseño en GitHub** para abrir una
+   solicitud con los ajustes ya escritos; agrega autor, licencia y
+   descripción. GitHub te pide iniciar sesión y tú decides si publicarla.
+   Un mantenedor incorporará el diseño tras revisarlo. Si prefieres
+   enviar el cambio directamente, haz un fork y abre un pull request con
    una entrada en [docs/galeria/designs.json](galeria/designs.json). Usa un
    ID nuevo y corto, texto descriptivo, autor y una licencia que permita
    reutilizar tu diseño (por ejemplo, CC0 si es tuyo y quieres permitirlo).
-3. Incluye en el PR el enlace de ajustes del editor y una captura si ayuda a revisarlo.
+3. Incluye una captura si ayuda a revisar el diseño.
    No adjuntes cookies, credenciales, conversaciones privadas, imágenes
    ajenas sin permiso ni un archivo de configuración de la aplicación.
 4. Un mantenedor revisa el diseño y lo incorpora al catálogo. Una vez

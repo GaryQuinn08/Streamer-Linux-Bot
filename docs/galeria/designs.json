@@ -1,9 +1,12 @@
 [
   {
     "id": "aurora",
-    "description": "Una alerta suave de regalo, con destellos menta y tipografía amplia.",
+    "description": "Un regalo entre destellos menta, sobre una tarjeta que respira.",
     "author": "Streamer Linux Bot",
     "license": "CC0-1.0",
+    "art": "orbit",
+    "shape": "tall",
+    "topics": ["menta", "suave", "gift", "regalo"],
     "preset": {
       "mode": "alert", "name": "Aurora", "title": "{user} envió {gift_name}", "body": "×{count} · {platform}",
       "accent": "#74efd2", "textColor": "#f5fffb", "background": "#12322c", "size": 42, "duration": 6, "opacity": 90
@@ -11,9 +14,12 @@
   },
   {
     "id": "comunidad",
-    "description": "Chat claro y compacto para acompañar la conversación sin tapar el directo.",
+    "description": "Conversación compacta, con lavanda para el chat de varias plataformas.",
     "author": "Streamer Linux Bot",
     "license": "CC0-1.0",
+    "art": "spark",
+    "shape": "wide",
+    "topics": ["lavanda", "violeta", "minimalista", "mensajes"],
     "preset": {
       "mode": "chat", "name": "Comunidad", "title": "{user} · {platform}", "body": "{text}",
       "accent": "#efbdff", "textColor": "#faf4ff", "background": "#251333", "size": 22, "duration": 15, "max": 5, "opacity": 82
@@ -21,12 +27,134 @@
   },
   {
     "id": "pulso",
-    "description": "Últimos eventos con acento mandarina, listos para una escena de actividad.",
+    "description": "Un rastro mandarina para seguir lo que pasa en el directo.",
     "author": "Streamer Linux Bot",
     "license": "CC0-1.0",
+    "art": "ribbon",
+    "shape": "square",
+    "topics": ["mandarina", "naranja", "actividad", "seguidores"],
     "preset": {
-      "mode": "events", "name": "Pulso", "title": "{user}", "body": "{type} · {platform}",
+      "mode": "events", "name": "Pulso", "title": "{user}", "body": "{event_label} · {platform}",
       "accent": "#ffbe7b", "textColor": "#fff8f0", "background": "#331f16", "size": 25, "duration": 10, "max": 6, "opacity": 92
+    }
+  },
+  {
+    "id": "orbita",
+    "example": "follow",
+    "description": "Cobalto profundo y una bienvenida para tu próxima persona seguidora.",
+    "author": "Streamer Linux Bot",
+    "license": "CC0-1.0",
+    "art": "orbit",
+    "shape": "square",
+    "topics": ["cobalto", "azul", "espacio", "seguidores"],
+    "preset": {
+      "mode": "alert", "name": "Órbita", "title": "Te damos la bienvenida, {user}", "body": "Nuevo seguimiento · {platform}",
+      "accent": "#b4c4ff", "textColor": "#f4f5ff", "background": "#202b65", "size": 31, "duration": 5, "opacity": 95
+    }
+  },
+  {
+    "id": "pixel-pop",
+    "description": "Chat fluorescente para partidas en clave arcade.",
+    "author": "Streamer Linux Bot",
+    "license": "CC0-1.0",
+    "art": "grid",
+    "shape": "tall",
+    "topics": ["arcade", "pixel", "fucsia", "gamer"],
+    "preset": {
+      "mode": "chat", "name": "Pixel Pop", "title": "{user}", "body": "{text}",
+      "accent": "#ff70c6", "textColor": "#fff3fc", "background": "#32205b", "size": 23, "duration": 0, "max": 6, "opacity": 95
+    }
+  },
+  {
+    "id": "nyx",
+    "description": "Una banda nocturna para ver la actividad sin quitarle foco a la escena.",
+    "author": "Streamer Linux Bot",
+    "license": "CC0-1.0",
+    "art": "scan",
+    "shape": "wide",
+    "topics": ["nocturno", "gris", "plateado", "sobrio", "actividad"],
+    "preset": {
+      "mode": "events", "name": "Nyx", "title": "{user}", "body": "{event_label}",
+      "accent": "#c3c5e5", "textColor": "#f6f6fe", "background": "#1b2031", "size": 19, "duration": 14, "max": 4, "opacity": 88
+    }
+  },
+  {
+    "id": "estudio",
+    "example": "donation",
+    "description": "Una tarjeta de arena y carbón para mostrar los datos de tu alerta.",
+    "author": "Streamer Linux Bot",
+    "license": "CC0-1.0",
+    "art": "ribbon",
+    "shape": "wide",
+    "topics": ["beige", "arena", "neutro", "producto", "limpio"],
+    "preset": {
+      "mode": "alert", "name": "Estudio", "title": "{alert_title}", "body": "{alert_text}",
+      "accent": "#f1d4aa", "textColor": "#fff6e6", "background": "#43332c", "size": 31, "duration": 8, "opacity": 96
+    }
+  },
+  {
+    "id": "mercurio",
+    "description": "Chat azul hielo con capas ligeras para conversaciones largas.",
+    "author": "Streamer Linux Bot",
+    "license": "CC0-1.0",
+    "art": "wave",
+    "shape": "square",
+    "topics": ["cian", "azul", "hielo", "limpio", "minimalista"],
+    "preset": {
+      "mode": "chat", "name": "Mercurio", "title": "{user}", "body": "{text}",
+      "accent": "#71daf2", "textColor": "#f0fdff", "background": "#143246", "size": 22, "duration": 18, "max": 8, "opacity": 75
+    }
+  },
+  {
+    "id": "retro-fm",
+    "description": "Amarillo limón y líneas de monitor retro para la actividad del LIVE.",
+    "author": "Streamer Linux Bot",
+    "license": "CC0-1.0",
+    "art": "grid",
+    "shape": "tall",
+    "topics": ["amarillo", "retro", "arcade", "monitor"],
+    "preset": {
+      "mode": "events", "name": "Retro FM", "title": "{user} · {platform}", "body": "{event_label}",
+      "accent": "#effa92", "textColor": "#fbffdf", "background": "#293619", "size": 24, "duration": 15, "max": 5, "opacity": 90
+    }
+  },
+  {
+    "id": "brasa",
+    "description": "Rosa coral en primer plano para agradecer un regalo en voz alta.",
+    "author": "Streamer Linux Bot",
+    "license": "CC0-1.0",
+    "art": "spark",
+    "shape": "tall",
+    "topics": ["coral", "rosa", "rojo", "gift", "regalo"],
+    "preset": {
+      "mode": "alert", "name": "Brasa", "title": "¡Gracias, {user}!", "body": "{gift_name} ×{count} · {platform}",
+      "accent": "#ff968b", "textColor": "#fff4f1", "background": "#552838", "size": 35, "duration": 7, "opacity": 98
+    }
+  },
+  {
+    "id": "violeta",
+    "description": "Pequeñas tarjetas moradas para leer mensajes a primera vista.",
+    "author": "Streamer Linux Bot",
+    "license": "CC0-1.0",
+    "art": "ribbon",
+    "shape": "tall",
+    "topics": ["violeta", "púrpura", "chill", "mensajes"],
+    "preset": {
+      "mode": "chat", "name": "Violeta", "title": "{user} en {platform}", "body": "{text}",
+      "accent": "#dfadff", "textColor": "#fff4ff", "background": "#3c2455", "size": 20, "duration": 20, "max": 6, "opacity": 93
+    }
+  },
+  {
+    "id": "marea",
+    "description": "Actividad con ondas turquesa y un espacio limpio para cada evento.",
+    "author": "Streamer Linux Bot",
+    "license": "CC0-1.0",
+    "art": "wave",
+    "shape": "wide",
+    "topics": ["turquesa", "mar", "movimiento", "actividad", "minimalista"],
+    "preset": {
+      "mode": "events", "name": "Marea", "title": "{user}", "body": "{event_label}",
+      "accent": "#75eadf", "textColor": "#eefffb", "background": "#134240", "size": 23, "duration": 0, "max": 4, "opacity": 89
     }
   }
 ]

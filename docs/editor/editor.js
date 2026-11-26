@@ -13,7 +13,7 @@
   const numberKeys = new Set(["size", "duration", "opacity", "max"]);
   const fieldFor = (key) => get(key === "css" ? "custom-css" : key);
   const titles = {
-    gift: "Regalo de TikTok", follow: "Nuevo seguidor", donation: "Donación",
+    gift: "Regalo de TikTok", follow: "Nuevo seguidor", donation: "Donación", bits: "Bits de Twitch", sub: "Suscripción",
     twitch: "Chat de Twitch", youtube: "Chat de YouTube", kick: "Chat de Kick", tiktok: "Chat de TikTok",
     chat: "Mensaje de chat"
   };
@@ -27,6 +27,10 @@
     donation: () => ({ platform: "youtube", user: "Sol", type: "donation", ts: ts(),
       data: { amount: 25, currency: "MXN", value: 25, text: "Sigue así 🤍" },
       title: "¡Gracias por el apoyo, Sol!", text: "Donación de 25 MXN." }),
+    bits: () => ({ platform: "twitch", user: "Mar", type: "bits", ts: ts(), data: { bits: 100, value: 100 },
+      title: "¡Lluvia de Bits!", text: "100 Bits" }),
+    sub: () => ({ platform: "twitch", user: "Sol", type: "sub", ts: ts(), data: { tier: "1000" },
+      title: "¡Nueva suscripción!", text: "Bienvenido al canal" }),
     chat: () => ({ platform: "kick", user: "Paz", type: "chat", ts: ts(), data: { text: "¿Qué jugamos hoy?" } })
   };
   const chatFixtures = {
@@ -36,7 +40,7 @@
     tiktok: ["Sol", "Pasaba a saludar, ¡buen directo!"]
   };
   const byMode = {
-    alert: ["gift", "follow", "donation"],
+    alert: ["gift", "follow", "donation", "bits", "sub"],
     chat: ["twitch", "youtube", "kick", "tiktok"],
     events: ["gift", "follow", "donation", "chat"]
   };
@@ -233,6 +237,24 @@
     }
   }
 
+  get("streamlabs-apply").addEventListener("click", () => {
+    const note = get("streamlabs-status");
+    try {
+      const event = get("streamlabs-event").value;
+      const text = window.SLB_STREAMLABS.convert(get("streamlabs-text").value, event);
+      if (mode !== "alert") open(api.normalize({ mode: "alert" }));
+      get("body").value = text;
+      get("fixture").value = event;
+      placeholders = [sample(event)];
+      showPreview();
+      note.textContent = "Mensaje adaptado. Revisa la muestra, descarga el HTML e impórtalo como overlay.";
+      note.dataset.error = "false";
+    } catch (error) {
+      note.textContent = error.message;
+      note.dataset.error = "true";
+    }
+  });
+
   get("mode").addEventListener("change", () => {
     const target = get("mode").value;
     drafts.set(mode, state());
@@ -275,15 +297,39 @@
     reopen(event.target.files[0]);
     event.target.value = "";
   });
-  get("share").addEventListener("click", async () => {
+  function shareableSettings() {
     const { mode: source, name, title, body, accent, textColor, background, duration, size, max, opacity } = state();
+    return { mode: source, name, title, body, accent, textColor, background, duration, size, max, opacity };
+  }
+
+  get("share").addEventListener("click", async () => {
     const uri = new URL(location.href);
     uri.search = "";
-    uri.hash = "preset=" + encodeURIComponent(JSON.stringify({
-      mode: source, name, title, body, accent, textColor, background, duration, size, max, opacity
-    }));
+    uri.hash = "preset=" + encodeURIComponent(JSON.stringify(shareableSettings()));
     if (await copy(uri.toString())) status("Enlace copiado. Incluye textos y aspecto, no cambios de HTML o CSS.");
     else status("No se pudo copiar el enlace de ajustes.", true);
+  });
+
+  get("suggest-design").addEventListener("click", () => {
+    const preset = shareableSettings();
+    if ([preset.name, preset.title, preset.body].some(value => /(?:https?:\/\/|www\.)/i.test(value))) {
+      status("Quita los enlaces de los textos antes de proponer el diseño. No compartas URL privadas.", true);
+      return;
+    }
+    const dest = new URL("https://github.com/GaryQuinn08/Streamer-Linux-Bot/issues/new");
+    dest.searchParams.set("title", "Diseño para la galería: " + (preset.name || "Sin nombre"));
+    dest.searchParams.set("body", [
+      "## Descripción", "Describe el diseño y cuándo usarlo.", "",
+      "## Autor y licencia", "Indica quién lo creó y qué licencia permite reutilizarlo.", "",
+      "## Ajustes visuales", "~~~json", JSON.stringify(preset, null, 2), "~~~", "",
+      "Revisa antes de enviar. No incluyas URL privadas, tokens ni credenciales. La propuesta requiere revisión."
+    ].join("\n"));
+    const link = document.createElement("a");
+    link.href = dest.href;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.click();
+    status("Se abrió un borrador en GitHub. Revísalo allí antes de enviarlo.");
   });
 
   open(api.fromUrl(location));

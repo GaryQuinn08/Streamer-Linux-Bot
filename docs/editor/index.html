@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="editor.css">
   <script defer src="tags.js"></script>
   <script defer src="engine.js"></script>
+  <script defer src="streamlabs.js"></script>
   <script defer src="editor.js"></script>
 </head>
 <body>
@@ -17,7 +18,7 @@
     <div class="wrap mast-inner">
       <a class="brand" href="../galeria/" aria-label="Abrir galería de Streamer Linux Bot"><span class="brand-mark">SL</span> Streamer Linux Bot</a>
       <nav aria-label="Navegación del estudio">
-        <a href="../galeria/">Galería</a>
+        <a href="../galeria/">Explorar diseños</a>
         <span aria-current="page">Editor</span>
       </nav>
     </div>
@@ -39,6 +40,28 @@
       </div>
     </section>
 
+    <details id="streamlabs-adapter" class="panel adapter">
+      <summary>Adaptar una alerta de Streamlabs</summary>
+      <div class="adapter-content">
+        <p>En Streamlabs, copia el campo <strong>Plantilla de mensaje</strong>, no la URL privada del widget. El texto se adapta aquí mismo, sin conectarse a Streamlabs.</p>
+        <div class="adapter-fields">
+          <label for="streamlabs-event">Evento
+            <select id="streamlabs-event">
+              <option value="follow">Seguidor</option>
+              <option value="donation">Donación / Super Chat</option>
+              <option value="bits">Bits de Twitch</option>
+              <option value="sub">Suscripción / membresía</option>
+            </select>
+          </label>
+          <label for="streamlabs-text">Plantilla de mensaje
+            <textarea id="streamlabs-text" rows="2" maxlength="420" placeholder="Ejemplo: ¡Gracias {name}!"></textarea>
+          </label>
+          <button id="streamlabs-apply" type="button" class="secondary">Usar en mi alerta</button>
+        </div>
+        <p id="streamlabs-status" class="help" aria-live="polite"></p>
+        <p class="help">Adapta texto y etiquetas compatibles. No importa archivos .overlay, sonidos, reglas, imágenes ni JavaScript. Si conservas el widget alojado en Streamlabs, agrega su URL privada directamente en OBS como fuente de navegador.</p>
+      </div>
+    </details>
     <div class="workspace">
       <section class="panel settings" aria-labelledby="settings-title">
         <header class="panel-head">
@@ -133,6 +156,8 @@
     <div class="footer-notes">
       <p><strong>Para usar en OBS o LIVE Studio:</strong> descarga el HTML, impórtalo en <strong>Overlays → Importar HTML…</strong> y copia la URL que te dé el bot.</p>
       <button id="share" class="quiet" type="button">Copiar enlace de ajustes</button>
+      <button id="suggest-design" class="quiet" type="button">Proponer diseño en GitHub ↗</button>
+      <p class="help">Abre una propuesta editable. No se publica nada hasta que la envíes en GitHub.</p>
       <p id="status" aria-live="polite"></p>
     </div>
     <noscript>Activa JavaScript para editar, simular eventos o descargar el HTML.</noscript>

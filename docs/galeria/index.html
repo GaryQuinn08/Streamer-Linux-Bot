@@ -3,32 +3,74 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="description" content="Descubre diseños de alertas, chat y actividad; elige uno y personalízalo en Streamer Linux Bot.">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Galería de overlays · Streamer Linux Bot</title>
   <link rel="stylesheet" href="gallery.css">
+  <script src="../editor/engine.js" defer></script>
   <script src="gallery.js" defer></script>
 </head>
 <body>
+  <a class="skip-link" href="#explorar">Saltar a los diseños</a>
   <header class="site-nav">
-    <a class="brand" href="../editor/">Streamer Linux Bot <span>Studio</span></a>
-    <a class="back" href="../editor/">Volver al editor →</a>
+    <div class="shell header-inner">
+      <a class="brand" href="./" aria-label="Streamer Linux Bot, galería"><span class="brand-mark" aria-hidden="true">SL</span> Streamer Linux Bot</a>
+      <nav aria-label="Estudio de overlays">
+        <a href="./" aria-current="page">Galería</a>
+        <a href="../editor/">Editor</a>
+      </nav>
+    </div>
   </header>
-  <main>
+  <main class="shell" id="explorar" tabindex="-1">
     <header class="hero">
-      <p class="eyebrow">DISEÑOS PARA TU DIRECTO</p>
-      <h1>Galería de overlays</h1>
-      <p>Abre un diseño en el editor, dale tu estilo y descarga el HTML para usarlo en Streamer Linux Bot.</p>
+      <div class="hero-copy">
+        <p class="eyebrow"><i aria-hidden="true"></i> CREATIVIDAD PARA TU DIRECTO</p>
+        <h1>Galería de overlays</h1>
+        <p>Encuentra un diseño para tu stream, dale tu toque en el editor o descarga el HTML listo para importar.</p>
+      </div>
+      <a href="../editor/" class="button secondary">Crear desde cero</a>
     </header>
-    <p id="status" role="status">Cargando diseños…</p>
-    <section id="designs" class="grid" aria-label="Diseños disponibles"></section>
+
+    <section class="explore" aria-label="Buscar y filtrar diseños">
+      <div class="toolbar">
+        <label class="search" for="search">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.7" cy="10.7" r="5.6"/><path d="m15 15 4 4"/></svg>
+          <span class="sr-only">Buscar diseños</span>
+          <input id="search" type="search" maxlength="120" autocomplete="off" placeholder="Busca un diseño, color o estilo">
+        </label>
+        <div class="chips" aria-label="Categoría">
+          <button type="button" class="chip" data-mode="all" aria-pressed="true">Todos</button>
+          <button type="button" class="chip" data-mode="alert" aria-pressed="false">Alertas</button>
+          <button type="button" class="chip" data-mode="chat" aria-pressed="false">Multichat</button>
+          <button type="button" class="chip" data-mode="events" aria-pressed="false">Eventos</button>
+        </div>
+        <button type="button" class="chip saved" id="favorites" aria-pressed="false"><span aria-hidden="true">♡</span> Favoritos <span class="fav-count" aria-hidden="true" id="favorite-count">0</span></button>
+      </div>
+      <div class="results-line">
+        <p id="status" role="status">Cargando diseños…</p>
+        <p class="privacy">Favoritos en este navegador, sin cuenta.</p>
+      </div>
+      <p id="notice" class="sr-only" role="status"></p>
+    </section>
+
+    <section id="designs" class="masonry" aria-label="Diseños disponibles" aria-busy="true"></section>
+    <section id="empty" class="empty" hidden>
+      <span class="empty-mark" aria-hidden="true">◇</span>
+      <h2 id="empty-title">Aún no hay diseños</h2>
+      <p id="empty-body"></p>
+      <button id="clear-filters" class="button secondary" type="button">Ver todos los diseños</button>
+    </section>
+
     <section class="contribute">
       <div>
-        <p class="eyebrow">COMUNIDAD</p>
-        <h2>Comparte tu diseño</h2>
-        <p>Propón un diseño por pull request. Se revisa antes de publicarse. La galería no ejecuta código de terceros ni pide cuentas propias.</p>
+        <p class="eyebrow">COLECCIÓN ABIERTA</p>
+        <h2>¿Creaste un diseño para compartir?</h2>
+        <p>Propón una plantilla para la galería. Las contribuciones se revisan antes de publicar; no se ejecuta código de terceros.</p>
       </div>
-      <a class="button" href="https://github.com/GaryQuinn08/Streamer-Linux-Bot/blob/refactor/overlay-boundary/docs/GALERIA.md">Ver cómo contribuir ↗</a>
+      <a class="button secondary" href="https://github.com/GaryQuinn08/Streamer-Linux-Bot/blob/refactor/overlay-boundary/docs/GALERIA.md">Cómo contribuir</a>
     </section>
+    <noscript>Activa JavaScript para buscar o personalizar diseños. También puedes <a href="../editor/">abrir el editor</a>.</noscript>
   </main>
 </body>
 </html>

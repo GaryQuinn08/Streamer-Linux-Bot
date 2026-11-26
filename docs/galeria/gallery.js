@@ -1,58 +1,281 @@
+/* Galería declarativa de Streamer Linux Bot. No recibe HTML ni JavaScript del catálogo. */
 (() => {
   "use strict";
-  const modeNames = new Map([["alert","Alerta"],["chat","Multichat"],["events","Actividad"]]);
-  const safeHex = /^#[0-9a-f]{6}$/i;
-  const textKeys = ["name","title","body"];
-  const colorKeys = ["accent","textColor","background"];
-  const limits = {duration:[0,300],size:[12,120],max:[1,24],opacity:[0,100]};
-  const designs = document.querySelector("#designs");
-  const status = document.querySelector("#status");
+  const get = (id) => document.getElementById(id);
+  const storageKey = "streamer-linux-bot.gallery.favorites.v1";
+  const modes = { alert: "Alerta", chat: "Multichat", events: "Eventos" };
+  const artKeys = new Set(["orbit", "wave", "grid", "ribbon", "spark", "scan"]);
+  const shapeKeys = new Set(["wide", "square", "tall"]);
+  const hex = /^#[0-9a-f]{6}$/i;
+  const ranges = { duration: [0, 300], size: [12, 72], max: [1, 24], opacity: [0, 100] };
+  const labelLimits = { name: 60, title: 220, body: 380 };
+  const validId = /^[a-z0-9][a-z0-9-]{0,63}$/;
+  const chips = Array.from(document.querySelectorAll("[data-mode].chip"));
+  const knownIds = new Set();
+  let favorites = loadFavorites();
+  let catalogue = [];
+  let selectedMode = "all";
+  let savedOnly = false;
+  let isLoaded = false;
 
-  function preset(raw) {
-    if (!raw || !modeNames.has(raw.mode) || typeof raw.name !== "string" || !raw.name.trim()) return null;
-    const output = {mode:raw.mode};
-    for (const key of textKeys) if (typeof raw[key] === "string") output[key] = raw[key].slice(0,200);
-    for (const key of colorKeys) if (typeof raw[key] === "string" && safeHex.test(raw[key])) output[key] = raw[key];
-    for (const [key,[min,max]] of Object.entries(limits)) {
-      if (typeof raw[key] === "number" && Number.isFinite(raw[key])) output[key] = Math.max(min,Math.min(max,raw[key]));
+  const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+
+  function safeText(value, limit) {
+    return typeof value === "string" ? value.trim().slice(0, limit) : "";
+  }
+
+  function loadFavorites() {
+    try {
+      const values = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      if (Array.isArray(values)) return new Set(values.slice(0, 1000).filter((key) => typeof key === "string" && validId.test(key)));
+    } catch { /* El almacenamiento puede estar bloqueado. */ }
+    return new Set();
+  }
+
+  function saveFavorites() {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify([...favorites].slice(0, 1000)));
+    } catch {
+      document.querySelector(".privacy").textContent = "El navegador no permite guardarlos; tus favoritos duran esta visita.";
     }
-    return output;
+  }
+
+  function modelFrom(entry) {
+    if (!entry || typeof entry.id !== "string" || !validId.test(entry.id) || knownIds.has(entry.id)) return null;
+    const raw = entry.preset;
+    if (!raw || typeof raw.mode !== "string" || !own(modes, raw.mode)) return null;
+    const name = safeText(raw.name, labelLimits.name);
+    if (!name) return null;
+    const preset = { mode: raw.mode, name };
+    for (const [key, max] of Object.entries(labelLimits)) {
+      if (key !== "name" && typeof raw[key] === "string") preset[key] = raw[key].slice(0, max);
+    }
+    for (const key of ["accent", "textColor", "background"]) {
+      if (typeof raw[key] === "string" && hex.test(raw[key])) preset[key] = raw[key];
+    }
+    for (const [key, [min, max]] of Object.entries(ranges)) {
+      if (typeof raw[key] === "number" && Number.isFinite(raw[key])) {
+        preset[key] = Math.min(max, Math.max(min, Math.round(raw[key])));
+      }
+    }
+    const description = safeText(entry.description, 240);
+    const author = safeText(entry.author, 80) || "Comunidad";
+    const license = safeText(entry.license, 35) || "Sin licencia indicada";
+    const topics = Array.isArray(entry.topics) ? entry.topics.slice(0, 16).map((word) => safeText(word, 35)).join(" ") : "";
+    const renderArt = artKeys.has(entry.art) ? entry.art : "orbit";
+    const shape = shapeKeys.has(entry.shape) ? entry.shape : "square";
+    const example = entry.example === "follow" || entry.example === "donation" ? entry.example : "gift";
+    knownIds.add(entry.id);
+    return { id: entry.id, description, author, license, renderArt, shape, preset, example,
+      index: normalized([name, description, author, modes[preset.mode], topics].join(" ")) };
+  }
+
+  function normalized(text) {
+    return text.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase("es").trim();
   }
 
   function add(parent, tag, value, cls) {
     const node = document.createElement(tag);
     if (cls) node.className = cls;
-    node.textContent = value;
+    if (value) node.textContent = value;
     parent.append(node);
     return node;
   }
 
-  function render(entry) {
-    const model = preset(entry?.preset);
-    if (!model) return;
-    const card = add(designs,"article","");
-    const sample = add(card,"div","","sample");
-    sample.style.setProperty("--accent",model.accent || "#91eed4");
-    sample.style.setProperty("--sample",model.background || "#151d28");
-    sample.style.setProperty("--ink",model.textColor || "#fffaf6");
-    add(sample,"span",modeNames.get(model.mode));
-    add(sample,"strong",model.mode === "alert" ? "Luna envió una Rosa" : model.mode === "chat" ? "Luna · ¡Hola, chat!" : "Luna · Nuevo seguidor");
-    add(card,"h2",model.name,"card-name");
-    add(card,"p",String(entry.description || "").slice(0,240),"description");
-    add(card,"p",String(entry.author || "Comunidad").slice(0,80) + " · " + String(entry.license || "Sin licencia indicada").slice(0,35),"meta");
-    const link = add(card,"a","Personalizar diseño →","button");
-    link.href = "../editor/#preset=" + encodeURIComponent(JSON.stringify(model));
-    link.setAttribute("aria-label","Personalizar " + model.name);
+  function now() {
+    return Math.floor(Date.now() / 1000);
   }
 
-  fetch("./designs.json").then(response => {
+  function samples(model) {
+    if (model.preset.mode === "alert") {
+      if (model.example === "follow") {
+        return [{ channel: "alert", user: "Mar", platform: "twitch", type: "follow", ts: now(), title: "¡Bienvenida, Mar!", text: "Nuevo seguimiento", variables: { user: "Mar", platform: "twitch", type: "follow" }, simulated: true }];
+      }
+      if (model.example === "donation") {
+        return [{ channel: "alert", user: "Sol", platform: "youtube", type: "donation", ts: now(), title: "¡Gracias por el apoyo, Sol!", text: "Donación de 25 MXN", variables: { user: "Sol", platform: "youtube", type: "donation", amount: 25, currency: "MXN" }, simulated: true }];
+      }
+      return [{ channel: "alert", user: "Luna", platform: "tiktok", type: "gift", ts: now(), title: "¡Luna envió un regalo!", text: "Rose ×3", variables: { user: "Luna", platform: "tiktok", type: "gift", gift_name: "Rose", count: 3 }, simulated: true }];
+    }
+    if (model.preset.mode === "chat") {
+      return [
+        { channel: "chat", user: "Luna", platform: "twitch", type: "chat", text: "¡Buen directo! ¿Qué jugamos hoy?" },
+        { channel: "chat", user: "Sol", platform: "youtube", type: "chat", text: "Saludos desde México." },
+        { channel: "chat", user: "Paz", platform: "kick", type: "chat", text: "Lista para la siguiente partida." }
+      ].map((entry) => ({ ...entry, simulated: true }));
+    }
+    return [
+      { channel: "event", user: "Luna", platform: "tiktok", type: "gift", data: { gift_name: "Rose", count: 3 } },
+      { channel: "event", user: "Mar", platform: "twitch", type: "follow", data: {} },
+      { channel: "event", user: "Sol", platform: "youtube", type: "donation", data: { amount: 25, currency: "MXN" } }
+    ].map((entry) => ({ ...entry, ts: now(), simulated: true }));
+  }
+
+  function sampleTpl(input, fields) {
+    return input.replace(/\{([a-z][a-z0-9_]{0,40})\}/gi, (_match, key) =>
+      own(fields, key) ? String(fields[key] ?? "") : "");
+  }
+
+  function sampleFields(message) {
+    const eventLabels = { gift: "envió un regalo", follow: "ahora te sigue", donation: "hizo una donación" };
+    return { ...message.data, ...message.variables,
+      user: message.user, platform: message.platform, type: message.type, event_type: message.type, text: message.text,
+      event_label: eventLabels[message.type] || message.type,
+      alert_title: message.title, alert_text: message.text, title: message.title };
+  }
+
+  function pinPreview(card, model, target) {
+    const media = add(card, "a", "", "pin-preview");
+    media.href = target;
+    media.setAttribute("aria-label", "Abrir vista editable de " + model.preset.name);
+    media.dataset.shape = model.shape;
+    media.dataset.art = model.renderArt;
+    media.dataset.mode = model.preset.mode;
+    const accent = model.preset.accent || "#a7f2cc";
+    const background = model.preset.background || "#203440";
+    media.style.setProperty("--accent", accent);
+    media.style.setProperty("--accent-dim", accent + "48");
+    media.style.setProperty("--halo", accent + "45");
+    media.style.setProperty("--ink", model.preset.textColor || "#f0f6fb");
+    media.style.setProperty("--sample", background);
+    media.style.setProperty("--panel-sample", background + Math.round((model.preset.opacity ?? 90) * 2.55).toString(16).padStart(2, "0"));
+    add(media, "span", modes[model.preset.mode], "kind");
+    const stage = add(media, "div", "", "peek-stage");
+    stage.setAttribute("aria-hidden", "true");
+    const fixtures = samples(model).slice(0, model.shape === "tall" ? 3 : 2);
+    for (const fixture of fixtures) {
+      const fields = sampleFields(fixture);
+      const title = model.preset.title ?? (model.preset.mode === "alert" ? "{alert_title}" : "{user}");
+      const body = model.preset.body ?? (model.preset.mode === "alert" ? "{alert_text}" : model.preset.mode === "chat" ? "{text}" : "{event_label}");
+      const peek = add(stage, "div", "", "peek-card");
+      add(peek, "span", fixture.platform, "platform");
+      add(peek, "strong", sampleTpl(title, fields));
+      add(peek, "p", sampleTpl(body, fields));
+    }
+  }
+
+  function download(model) {
+    try {
+      const editor = window.SLB_EDITOR;
+      if (!editor) throw Error("El exportador no está disponible. Abre el editor e inténtalo otra vez.");
+      const html = editor.build(editor.normalize(model.preset, true), samples(model), true);
+      const object = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+      const anchor = document.createElement("a");
+      anchor.href = object;
+      anchor.download = model.id + ".html";
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(object), 2000);
+      get("notice").textContent = "Descargado " + model.preset.name + ". Impórtalo en Overlays → Importar HTML…";
+    } catch {
+      get("notice").textContent = "No se pudo descargar el diseño. Prueba el botón Personalizar y descarga desde el editor.";
+    }
+  }
+
+  function setFavoriteButton(model) {
+    const isFavorite = favorites.has(model.id);
+    model.favorite.textContent = isFavorite ? "♥" : "♡";
+    model.favorite.setAttribute("aria-pressed", String(isFavorite));
+    model.favorite.setAttribute("aria-label", (isFavorite ? "Quitar de favoritos: " : "Guardar en favoritos: ") + model.preset.name);
+    model.favorite.title = isFavorite ? "Quitar de favoritos" : "Guardar en favoritos";
+  }
+
+  function toggleFavorite(model) {
+    const old = favorites.has(model.id);
+    if (old) favorites.delete(model.id);
+    else favorites.add(model.id);
+    saveFavorites();
+    setFavoriteButton(model);
+    if (savedOnly) {
+      render();
+      // Si la ficha desapareció, deja el foco en el primer resultado, o en la salida del filtro.
+      get("designs").querySelector("button.favorite")?.focus();
+      if (!get("empty").hidden) get("clear-filters").focus();
+    } else {
+      updateCount();
+    }
+    get("notice").textContent = model.preset.name + (old ? " se quitó de favoritos." : " se guardó en favoritos.");
+  }
+
+  function createCard(model) {
+    const card = document.createElement("article");
+    card.className = "pin";
+    card.dataset.id = model.id;
+    const target = "../editor/#preset=" + encodeURIComponent(JSON.stringify(model.preset));
+    pinPreview(card, model, target);
+    model.favorite = add(card, "button", "", "favorite");
+    model.favorite.type = "button";
+    model.favorite.addEventListener("click", () => toggleFavorite(model));
+    setFavoriteButton(model);
+    const body = add(card, "div", "", "pin-body");
+    add(body, "h2", model.preset.name, "pin-name");
+    add(body, "p", model.description, "description");
+    add(body, "p", model.author + " · " + model.license, "meta");
+    const actions = add(body, "div", "", "pin-actions");
+    const edit = add(actions, "a", "Personalizar", "button primary");
+    edit.href = target;
+    edit.setAttribute("aria-label", "Personalizar " + model.preset.name);
+    const save = add(actions, "button", "Descargar HTML", "button secondary");
+    save.type = "button";
+    save.setAttribute("aria-label", "Descargar HTML de " + model.preset.name);
+    save.addEventListener("click", () => download(model));
+    return card;
+  }
+
+  function updateCount() {
+    get("favorite-count").textContent = String(catalogue.filter((model) => favorites.has(model.id)).length);
+  }
+
+  function render() {
+    for (const chip of chips) chip.setAttribute("aria-pressed", String(chip.dataset.mode === selectedMode));
+    get("favorites").setAttribute("aria-pressed", String(savedOnly));
+    if (!isLoaded) return;
+    const words = normalized(get("search").value).split(/\s+/).filter(Boolean);
+    const matches = catalogue.filter((card) => {
+      if (savedOnly && !favorites.has(card.id)) return false;
+      if (selectedMode !== "all" && selectedMode !== card.preset.mode) return false;
+      return words.every((word) => card.index.includes(word));
+    });
+    get("designs").replaceChildren(...matches.map((model) => model.node));
+    get("status").textContent = matches.length === 1 ? "1 diseño" : matches.length + " diseños";
+    get("empty").hidden = matches.length > 0;
+    if (!matches.length) {
+      const noneSaved = savedOnly && !catalogue.some((card) => favorites.has(card.id));
+      get("empty-title").textContent = noneSaved ? "Todavía no tienes favoritos" : "No encontramos diseños";
+      get("empty-body").textContent = noneSaved
+        ? "Pulsa el corazón de un diseño para guardarlo en este navegador."
+        : "Prueba con otra búsqueda o elige una categoría distinta.";
+    }
+    updateCount();
+  }
+
+  for (const chip of chips) chip.addEventListener("click", () => { selectedMode = chip.dataset.mode; render(); });
+  get("search").addEventListener("input", render);
+  get("favorites").addEventListener("click", () => { savedOnly = !savedOnly; selectedMode = "all"; render(); });
+  get("clear-filters").addEventListener("click", () => {
+    get("search").value = "";
+    selectedMode = "all";
+    savedOnly = false;
+    render();
+    get("search").focus();
+  });
+
+  fetch("./designs.json").then((response) => {
     if (!response.ok) throw Error("No se pudo leer el catálogo");
     return response.json();
-  }).then(entries => {
+  }).then((entries) => {
     if (!Array.isArray(entries)) throw Error("Catálogo inválido");
-    entries.slice(0,200).forEach(render);
-    status.textContent = designs.childElementCount ? "" : "Todavía no hay diseños.";
+    catalogue = entries.slice(0, 200).map(modelFrom).filter(Boolean);
+    for (const item of catalogue) item.node = createCard(item);
+    isLoaded = true;
+    get("designs").setAttribute("aria-busy", "false");
+    render();
   }).catch(() => {
-    status.textContent = "No se pudo cargar la galería. Abre el sitio desde GitHub Pages o con un servidor local.";
+    get("status").textContent = "No se pudo cargar la galería.";
+    get("designs").setAttribute("aria-busy", "false");
+    get("empty").hidden = false;
+    get("empty-title").textContent = "No pudimos abrir el catálogo";
+    get("empty-body").textContent = "Recarga la página o abre la galería desde GitHub Pages o desde un servidor local.";
+    get("clear-filters").hidden = true;
   });
 })();

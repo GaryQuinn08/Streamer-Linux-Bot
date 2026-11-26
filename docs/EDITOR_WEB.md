@@ -66,3 +66,21 @@ La publicación por rama y los límites están documentados en [fuentes de
 publicación de GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
 y [límites de GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits).
 Para añadir diseños y comparar otras arquitecturas, consulta [Galería](GALERIA.md).
+
+## Aprovechar diseños de Streamlabs u otras plataformas
+
+- **Ya tienes una URL de widget:** pégala directamente en una fuente
+  **Navegador** de OBS. El widget sigue ejecutándose en Streamlabs, no
+  recibe eventos de Streamer Linux Bot. No compartas la URL en la galería.
+  [Instrucciones de Streamlabs](https://streamlabs.com/content-hub/post/how-to-locate-and-use-streamlabs-widget-urls).
+- **Quieres una alerta propia en el bot:** abre **Adaptar una alerta de
+  Streamlabs** en el editor, elige el evento y pega la **plantilla de
+  mensaje**. El editor traduce `{name}` a `{user}` y `{amount}` según
+  el evento: importe y moneda en donaciones o `{bits}` en Twitch. Las
+  etiquetas sin equivalente se señalan antes de exportar. Usa **Descargar
+  HTML → Overlays → Importar HTML…** y selecciona el overlay en la
+  subacción de tu evento. No importa escenas, archivos `.overlay`,
+  JavaScript, sonidos ni las reglas de Streamlabs.
+- **Tienes HTML/CSS propios:** puedes copiar el marcado y estilos
+  compatibles a sus pestañas y sustituir las etiquetas de eventos.
+  No pegues código privado o diseños que no tienes permiso de reutilizar.
