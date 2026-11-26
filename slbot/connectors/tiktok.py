@@ -182,7 +182,9 @@ class TiktokConnector(Connector):
                     if client.connected:
                         await client.disconnect()
             finally:
-                await client.close()
+                # TikTokLive 6.6 close() intenta relanzar el loop existente.
+                # El WebSocket ya se cerró arriba; aquí solo se cierra su HTTP.
+                await client.web.close()
 
     async def stop(self) -> None:
         if self._task is not None:

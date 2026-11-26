@@ -20,7 +20,7 @@ done
 source_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 code_dir="$source_dir"
 icon="$source_dir/streamer-linux-bot.svg"
-if [ -f "$source_dir/../../slbot/__main__.py" ]; then
+if [ ! -f "$source_dir/slbot/__main__.py" ] && [ -f "$source_dir/../../slbot/__main__.py" ]; then
     code_dir=$(CDPATH='' cd -- "$source_dir/../.." && pwd)
     icon="$code_dir/packaging/debian/streamer-linux-bot.svg"
 fi
@@ -87,7 +87,7 @@ from TikTokLive import TikTokLiveClient
 
 async def check():
     client = TikTokLiveClient(unique_id="local_install_check")
-    await client.close()  # No se conecta a ningún directo.
+    await client.web.close()  # No se conecta a ningún directo.
 
 asyncio.run(check())
 TIKTOK
