@@ -21,32 +21,56 @@ sin imprimir las credenciales.
   `servidor --tiktok tikfinity`. No ejecutes ambos conectores para el
   mismo directo simultáneamente.
 
-## Twitch (EventSub)
+## Iniciar sesión desde la app
 
-En la misma terminal en la que abrirás el bot, define
-`SLB_TWITCH_CLIENT_ID`, `SLB_TWITCH_BROADCASTER_ID` (ID numérico) y
-`SLB_TWITCH_TOKEN` (token OAuth de usuario del propio titular del canal,
-sin el prefijo `Bearer`). Requiere una [app propia en Twitch](https://dev.twitch.tv/docs/authentication/register-app/)
-y [obtener un token de usuario](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/).
-Para no dejar el token en el historial, usa `read -rs SLB_TWITCH_TOKEN; export SLB_TWITCH_TOKEN` en Bash.
-Pulsa **Conectar Twitch** o usa `servidor --twitch`.
-Los permisos correspondientes son `user:read:chat`,
-`moderator:read:followers`, `channel:read:subscriptions`,
-`bits:read` y `channel:read:redemptions`. Twitch puede rechazar tipos
-individuales según los permisos y capacidades de tu canal.
-No hay flujo de inicio de sesión ni renovación automática en la app.
+En **Inicio → Twitch / YouTube**, pulsa **Iniciar sesión**. El bot abre el
+navegador predeterminado en el sitio oficial y, al autorizar, vuelve al
+bot automáticamente. No pegues tokens en la app. Las autorizaciones solo
+se guardan en memoria mientras dura la conexión. Si vence el token,
+vuelve a iniciar sesión. El bot recuerda únicamente el Client ID público
+de Twitch y la ruta local al archivo de cliente de Google, no su contenido.
+Para cambiar de cliente o proyecto, usa **Configurar…**.
 
-## YouTube (chat en vivo)
+### Twitch: configuración por primera vez
 
-Habilita YouTube Data API, obtén un token OAuth de usuario con
-`https://www.googleapis.com/auth/youtube.readonly` y el `liveChatId` de un
-directo vigente con chat. Exporta `SLB_YOUTUBE_TOKEN` y
-`SLB_YOUTUBE_LIVE_CHAT_ID` en la terminal que abra el bot.
-Pulsa **Conectar YouTube** o usa `servidor --youtube`. El bot no ejecuta
-acciones por chat histórico; comienza con los eventos nuevos. Recibe chat,
-Super Chat, Super Stickers y nuevas membresías. Usa el método
-[LiveChatMessages: list](https://developers.google.com/youtube/data/live/reference/rest/v3/liveChatMessages/list):
-consume cuota del proyecto y no renueva el token.
+1. En la [consola de Twitch Developers](https://dev.twitch.tv/console/apps)
+   registra una aplicación de tipo **Public** con la URL de redireccionamiento
+   exacta `http://localhost:17845/oauth/twitch`. No necesitas Client Secret.
+2. En la app pulsa **Iniciar sesión en Twitch**, introduce el **Client ID**
+   que te dio Twitch y autoriza con la cuenta dueña de tu canal. El bot
+   obtiene el ID de tu canal y se conecta a EventSub.
+3. Si el puerto 17845 está en uso, no cierres procesos ajenos: revisa si
+   otra copia está iniciando sesión. Este puerto es local y distinto al
+   del catálogo.
+
+Se solicitan permisos de lectura `user:read:chat`, `moderator:read:followers`,
+`channel:read:subscriptions`, `bits:read` y `channel:read:redemptions`.
+Algunos eventos no están disponibles para todos los canales.
+
+### YouTube: configuración por primera vez
+
+1. En Google Cloud habilita **YouTube Data API v3** y crea un
+   [cliente OAuth de tipo Aplicación de escritorio](https://console.cloud.google.com/auth/clients).
+   Configura la pantalla de consentimiento y, si el proyecto está en modo
+   Pruebas, agrega tu cuenta como usuario de prueba.
+2. Descarga el JSON del cliente, guárdalo en tu equipo (no en Git) y
+   selecciónalo en **Iniciar sesión en YouTube**.
+3. En Google elige la cuenta o canal que tiene el directo y autoriza el
+   acceso de lectura. El bot busca el directo activo más reciente que tenga
+   chat. No ejecuta acciones por chat histórico. Recibe chat, Super Chat,
+   Super Stickers y nuevas membresías.
+
+Para cuentas públicas necesitarías distribuir Client IDs de aplicaciones
+propias y, según los permisos y la plataforma, completar su verificación.
+Esta beta no incluye identificadores de proyectos de terceros.
+
+### Servidor sin interfaz
+
+El modo `servidor` conserva las variables de entorno, sin abrir navegador.
+Para Twitch usa `--twitch` con `SLB_TWITCH_CLIENT_ID`, `SLB_TWITCH_BROADCASTER_ID`
+y `SLB_TWITCH_TOKEN`. Para YouTube usa `--youtube` con `SLB_YOUTUBE_TOKEN`
+y `SLB_YOUTUBE_LIVE_CHAT_ID`. Introduce los tokens localmente; evita
+dejarlos en el historial de la terminal o en archivos del repositorio.
 
 ## Kick (webhook firmado, solo servidor)
 

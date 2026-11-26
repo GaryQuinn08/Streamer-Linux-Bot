@@ -41,6 +41,7 @@ from ..connectors.simulator import SAMPLE_KINDS, sample_event
 from ..overlay_manager import OverlayInfo, create_alert, import_overlay, list_overlays, validate_overlay_values
 from ..runtime import Runtime
 from .rule_editor import RulesPanel
+from .platform_login import PlatformLoginPanel
 
 SAMPLE_LABELS = {
     "gift": "Regalo (TikTok)",
@@ -170,23 +171,8 @@ class HomeTab(QWidget):
         tiktok_form.addRow(tiktok_row)
         layout.addWidget(tiktok_group)
 
-        receiving = QGroupBox("Twitch / YouTube · experimental")
-        receiving_layout = QVBoxLayout(receiving)
-        details = QLabel("Configura las credenciales de tu cuenta en la terminal antes de abrir el bot. "
-                         "Consulta el README. El bot no guarda tokens ni envía mensajes de chat.")
-        details.setWordWrap(True)
-        receiving_layout.addWidget(details)
-        for platform in ("twitch", "youtube"):
-            row = QHBoxLayout()
-            connector = self.rt.connectors[platform]
-            connect = QPushButton(f"Conectar {platform.title()}")
-            disconnect = QPushButton(f"Desconectar {platform.title()}")
-            connect.clicked.connect(lambda _checked, c=connector: self.rt.submit(c.start()))
-            disconnect.clicked.connect(lambda _checked, c=connector: self.rt.submit(c.stop()))
-            row.addWidget(connect)
-            row.addWidget(disconnect)
-            receiving_layout.addLayout(row)
-        layout.addWidget(receiving)
+        self.platform_login = PlatformLoginPanel(runtime)
+        layout.addWidget(self.platform_login)
 
         layout.addWidget(QLabel("<b>Enviar un evento de prueba</b> (pasa por los triggers y los overlays)"))
         tests = QHBoxLayout()
@@ -284,6 +270,7 @@ class HomeTab(QWidget):
         self.server_label.setText(f"Servidor de overlays: http://127.0.0.1:{port}/" if port is not None
                                   else self.rt.overlay_port_message or "Asigna un puerto para activar los overlays.")
         self.open_catalog.setEnabled(port is not None)
+        self.platform_login.refresh()
         self.music_label.setText("En reproducción: " + self.rt.music.current
                                  if self.rt.music.current else "Sin reproducción activa.")
         self.connect_obs.setEnabled(self.rt.obs.status != "conectando…")

@@ -11,6 +11,7 @@ import aiohttp
 from yarl import URL
 
 from .base import Connector
+from .oauth import SignInError, browser_client, sign_in, twitch_identity, youtube_live_chat
 from ..core.events import Event
 
 
@@ -65,20 +66,34 @@ class _Receiver(Connector):
         self._task = None
         self._seen = OrderedDict()
 
-    async def start(self):
+    async def start(self, *, browser=None, setting: str = ""):
         if self._task is None or self._task.done():
-            self.status = "conectando…"
-            self._task = asyncio.create_task(self._run())
+            self.status = "autoriza en el navegador…" if browser else "conectando…"
+            self._task = asyncio.create_task(self._run(browser, setting))
 
-    async def _run(self):
+    @property
+    def busy(self):
+        return self._task is not None and not self._task.done()
+
+    async def _run(self, browser, setting):
         try:
-            await self.receive()
+            if browser:
+                client = await browser_client(self.name, setting)
+                token = await sign_in(client, browser)
+                self.status = "autorizado; conectando…"
+                await self.receive((token, client.client_id))
+            else:
+                await self.receive()
             self.status = "desconectado"
-        except ValueError as exc:
-            self.status = "revisa la configuración"
+        except SignInError as exc:
+            self.status = str(exc)
             self.rt.log(f"{self.name}: {exc}")
+        except ValueError:
+            self.status = "revisa la configuración y el directo"
+            self.rt.log(f"{self.name}: la conexión no es válida o faltan permisos.")
         except aiohttp.ClientResponseError as exc:
-            self.status = f"error HTTP {exc.status}"
+            self.status = ("la sesión expiró; vuelve a iniciar sesión" if exc.status == 401
+                           else f"error HTTP {exc.status}")
             self.rt.log(f"{self.name}: HTTP {exc.status}. Revisa las credenciales, los permisos y el directo.")
         except (aiohttp.ClientError, TimeoutError, TypeError, KeyError):
             self.status = "conexión interrumpida"
@@ -108,12 +123,21 @@ class _Receiver(Connector):
 class TwitchConnector(_Receiver):
     name = "twitch"
 
-    async def receive(self):
-        token, client, owner = (os.environ.get(name, "") for name in
-                               ("SLB_TWITCH_TOKEN", "SLB_TWITCH_CLIENT_ID", "SLB_TWITCH_BROADCASTER_ID"))
-        if not (token and client and owner.isdigit()):
-            raise ValueError("configura SLB_TWITCH_TOKEN, SLB_TWITCH_CLIENT_ID y SLB_TWITCH_BROADCASTER_ID.")
+    async def receive(self, authorization=None):
+        if authorization:
+            token, client = authorization
+            owner = ""
+        else:
+            token, client, owner = (os.environ.get(name, "") for name in
+                                   ("SLB_TWITCH_TOKEN", "SLB_TWITCH_CLIENT_ID", "SLB_TWITCH_BROADCASTER_ID"))
+            if not (token and client and owner.isdigit()):
+                raise SignInError("Configura SLB_TWITCH_TOKEN, SLB_TWITCH_CLIENT_ID y SLB_TWITCH_BROADCASTER_ID.")
         headers = {"Authorization": f"Bearer {token}", "Client-Id": client}
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=9)) as session:
+            logged_in = await twitch_identity(session, token, client)
+            await self._events(session, token, client, owner or logged_in, headers)
+
+    async def _events(self, session, token, client, owner, headers):
         specs = (
             ("channel.chat.message", "1", {"user_id": owner}),
             ("channel.follow", "2", {"moderator_user_id": owner}),
@@ -121,61 +145,70 @@ class TwitchConnector(_Receiver):
             ("channel.cheer", "1", {}),
             ("channel.channel_points_custom_reward_redemption.add", "1", {}),
         )
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=9)) as session:
-            async with AsyncExitStack() as sockets:
-                async def open_socket(url):
-                    socket = await sockets.enter_async_context(
-                        session.ws_connect(url, max_msg_size=1024 * 1024))
-                    hello = await socket.receive_json(timeout=12)
-                    if hello["metadata"]["message_type"] != "session_welcome":
-                        raise ValueError("EventSub no envió una bienvenida.")
-                    return socket, hello["payload"]["session"]
+        async with AsyncExitStack() as sockets:
+            async def open_socket(url):
+                socket = await sockets.enter_async_context(
+                    session.ws_connect(url, max_msg_size=1024 * 1024))
+                hello = await socket.receive_json(timeout=12)
+                if hello["metadata"]["message_type"] != "session_welcome":
+                    raise ValueError("EventSub no envió una bienvenida.")
+                return socket, hello["payload"]["session"]
 
-                ws, info = await open_socket(URL("wss://eventsub.wss.twitch.tv/ws"))
+            ws, info = await open_socket(URL("wss://eventsub.wss.twitch.tv/ws"))
 
-                async def subscribe(kind, version, extra):
-                    async with session.post("https://api.twitch.tv/helix/eventsub/subscriptions",
-                                headers=headers, allow_redirects=False, json={
-                                    "type": kind, "version": version,
-                                    "condition": {"broadcaster_user_id": owner, **extra},
-                                    "transport": {"method": "websocket", "session_id": info["id"]},
-                                }) as response:
-                        if response.status != 202:
-                            self.rt.log(f"Twitch: {kind} no autorizado o no disponible ({response.status}).")
-                        return response.status == 202
+            async def subscribe(kind, version, extra):
+                async with session.post("https://api.twitch.tv/helix/eventsub/subscriptions",
+                            headers=headers, allow_redirects=False, json={
+                                "type": kind, "version": version,
+                                "condition": {"broadcaster_user_id": owner, **extra},
+                                "transport": {"method": "websocket", "session_id": info["id"]},
+                            }) as response:
+                    if response.status != 202:
+                        self.rt.log(f"Twitch: {kind} no autorizado o no disponible ({response.status}).")
+                    return response.status == 202
 
-                if not any(await asyncio.gather(*(subscribe(*spec) for spec in specs))):
-                    raise ValueError("no se pudo suscribir a ningún evento; revisa los permisos del token.")
-                self.status = "conectado (EventSub)"
-                while True:
-                    packet = await ws.receive_json(timeout=(info.get("keepalive_timeout_seconds") or 30) + 5)
-                    metadata, payload = packet["metadata"], packet.get("payload", {})
-                    kind = metadata["message_type"]
-                    if kind == "notification":
-                        await self.publish(metadata.get("message_id"), twitch_events(
-                            metadata.get("subscription_type", ""), payload.get("event", {})))
-                    elif kind == "revocation":
-                        self.rt.log("Twitch revocó una suscripción; revisa los permisos en tu cuenta.")
-                    elif kind == "session_reconnect":
-                        candidate = URL(payload["session"]["reconnect_url"])
-                        if (candidate.scheme != "wss" or candidate.host != "eventsub.wss.twitch.tv"
-                                or candidate.port != 443 or candidate.user is not None):
-                            raise ValueError("EventSub envió una dirección de reconexión no válida.")
-                        old = ws
-                        ws, info = await open_socket(candidate)
-                        await old.close()
+            if not any(await asyncio.gather(*(subscribe(*spec) for spec in specs))):
+                raise ValueError("no se pudo suscribir a ningún evento; revisa los permisos del token.")
+            self.status = "conectado (EventSub)"
+            loop = asyncio.get_running_loop()
+            validate_at = loop.time() + 3500
+            while True:
+                if loop.time() >= validate_at:
+                    await twitch_identity(session, token, client)
+                    validate_at = loop.time() + 3500
+                packet = await ws.receive_json(timeout=(info.get("keepalive_timeout_seconds") or 30) + 5)
+                metadata, payload = packet["metadata"], packet.get("payload", {})
+                kind = metadata["message_type"]
+                if kind == "notification":
+                    await self.publish(metadata.get("message_id"), twitch_events(
+                        metadata.get("subscription_type", ""), payload.get("event", {})))
+                elif kind == "revocation":
+                    self.rt.log("Twitch revocó una suscripción; revisa los permisos en tu cuenta.")
+                elif kind == "session_reconnect":
+                    candidate = URL(payload["session"]["reconnect_url"])
+                    if (candidate.scheme != "wss" or candidate.host != "eventsub.wss.twitch.tv"
+                            or candidate.port != 443 or candidate.user is not None):
+                        raise ValueError("EventSub envió una dirección de reconexión no válida.")
+                    old = ws
+                    ws, info = await open_socket(candidate)
+                    await old.close()
 
 
 class YoutubeConnector(_Receiver):
     name = "youtube"
 
-    async def receive(self):
-        token, chat = (os.environ.get(k, "") for k in ("SLB_YOUTUBE_TOKEN", "SLB_YOUTUBE_LIVE_CHAT_ID"))
-        if not (token and chat):
-            raise ValueError("configura SLB_YOUTUBE_TOKEN y SLB_YOUTUBE_LIVE_CHAT_ID.")
+    async def receive(self, authorization=None):
+        if authorization:
+            token, _client = authorization
+            chat = ""
+        else:
+            token, chat = (os.environ.get(k, "") for k in ("SLB_YOUTUBE_TOKEN", "SLB_YOUTUBE_LIVE_CHAT_ID"))
+            if not (token and chat):
+                raise SignInError("Configura SLB_YOUTUBE_TOKEN y SLB_YOUTUBE_LIVE_CHAT_ID.")
         headers = {"Authorization": f"Bearer {token}"}
-        params = {"part": "snippet,authorDetails", "liveChatId": chat, "maxResults": "200"}
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=12)) as session:
+            chat = chat or await youtube_live_chat(session, headers)
+            params = {"part": "snippet,authorDetails", "liveChatId": chat, "maxResults": "200"}
             initial = True
             while True:
                 async with session.get("https://www.googleapis.com/youtube/v3/liveChat/messages",
