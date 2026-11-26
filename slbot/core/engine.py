@@ -26,7 +26,8 @@ class Engine:
             last = self._last_fired.get(trigger.id)
             if trigger.cooldown_s and last is not None and now - last < trigger.cooldown_s:
                 continue
-            author = ev.user.strip().casefold()[:100] if isinstance(ev.user, str) else ""
+            author = (f"id:{ev.actor_id}" if ev.actor_id else
+                      "name:" + (ev.user.strip().casefold()[:100] if isinstance(ev.user, str) else ""))
             key = (trigger.id, ev.platform, author)
             last_user = self._last_user_fired.get(key) if trigger.user_cooldown_s else None
             if last_user is not None and now - last_user < trigger.user_cooldown_s:

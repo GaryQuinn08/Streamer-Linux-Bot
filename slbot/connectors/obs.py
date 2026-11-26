@@ -220,3 +220,30 @@ class ObsConnector(Connector):
                 client.set_scene_item_enabled(scene, item.scene_item_id, visible)
 
             await asyncio.to_thread(apply)
+
+    async def _request(self, name, data, method, *args, **kwargs):
+        async with self._lock:
+            client = self._require()
+            if isinstance(client, _DebianObsClient):
+                await client.call(name, **data)
+            else:
+                await asyncio.to_thread(getattr(client, method), *args, **kwargs)
+
+    async def set_input_mute(self, source: str, muted: bool) -> None:
+        await self._request("SetInputMute", {"inputName": source, "inputMuted": muted},
+                            "set_input_mute", source, muted)
+
+    async def set_input_volume(self, source: str, db: float) -> None:
+        if not -100 <= db <= 0:
+            raise ValueError("El volumen debe estar entre -100 y 0 dB.")
+        await self._request("SetInputVolume", {"inputName": source, "inputVolumeDb": db},
+                            "set_input_volume", source, vol_db=db)
+
+    async def set_filter_enabled(self, source: str, name: str, enabled: bool) -> None:
+        await self._request("SetSourceFilterEnabled", {"sourceName": source, "filterName": name,
+                            "filterEnabled": enabled}, "set_source_filter_enabled", source, name, enabled)
+
+    async def restart_media(self, source: str) -> None:
+        mode = "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART"
+        await self._request("TriggerMediaInputAction", {"inputName": source, "mediaAction": mode},
+                            "trigger_media_input_action", source, mode)

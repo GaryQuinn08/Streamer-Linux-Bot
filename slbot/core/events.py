@@ -28,6 +28,8 @@ class Event:
     user: str = ""
     data: dict[str, Any] = field(default_factory=dict)
     ts: float = field(default_factory=time.time)
+    actor_id: str = ""  # interno: no se envía a overlays ni templates
+    chat_role: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {

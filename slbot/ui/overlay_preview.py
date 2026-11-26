@@ -3,15 +3,18 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from math import sin
 from PySide6.QtCore import QEasingCurve, QElapsedTimer, QPointF, QRectF, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QLinearGradient, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QLinearGradient, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import QWidget
 
 from ..overlay_manager import OverlayInfo, validate_overlay_values
 from ..overlay_pack import DYNAMIC, _component
 
-_ACTIVE = {"alert", "chat", "events", "goal"}
-_BUILTIN = {"gift-alert": "alert", "multi-chat": "chat", "event-feed": "events", "live-goal": "goal"}
+_MUSIC = {"music-vinyl", "music-spectrum"}
+_ACTIVE = {"alert", "chat", "events", "goal"} | _MUSIC
+_BUILTIN = {"gift-alert": "alert", "multi-chat": "chat", "event-feed": "events", "live-goal": "goal",
+            "now-playing": "music-vinyl", "now-playing-spectrum": "music-spectrum"}
 _TOKEN = re.compile(r"\{([a-z][a-z0-9_]{0,40})\}", re.I)
 _W, _H = 960, 540
 _SAMPLES = {
@@ -63,6 +66,12 @@ def make_rehearsal(info: OverlayInfo, draft: dict[str, str]) -> Rehearsal | None
             val = checked[spec["key"]]
             settings[spec["key"]] = int(float(val)) if spec["type"] == "number" else (
                 val == "true" if spec["type"] == "bool" else val)
+    if kind in _MUSIC:
+        enabled = settings.get("motion", True)
+        effect = "slide-up" if kind == "music-vinyl" else "slide-left"
+        settings.update(enter=effect if enabled else "none", exit=effect if enabled else "none",
+                        enterMs=480, exitMs=300, duration=3)
+        return Rehearsal(kind, settings, True)
     settings.update({
         "alert": {"enter": "pop", "exit": "pop", "enterMs": 350, "exitMs": 350},
         "chat": {"enter": "slide-up", "exit": "fade", "enterMs": 180, "exitMs": 320},
@@ -188,7 +197,8 @@ class OverlayPreview(QWidget):
         elif self.phase == "exit" and elapsed >= s.get("exitMs", 0):
             self.phase = "hidden"
         if self.phase not in {"idle", "hidden"}:
-            self._timer.start(max(1, length - elapsed) if self.phase == "hold" else 16)
+            animated_music = self.model.kind in _MUSIC and s.get("motion", True)
+            self._timer.start(max(1, length - elapsed) if self.phase == "hold" and not animated_music else 16)
         else:
             self._timer.stop()
         self.update()
@@ -342,6 +352,8 @@ class OverlayPreview(QWidget):
             s.update(positionY=8, width=90)
             rows = [(name + " " + verb, "", source) for name, source, _, _, verb in _SAMPLES["events"]]
             self._stack(p, s, rows[:opts.get("max", 6)])
+        elif kind in _MUSIC:
+            self._music(p, kind == "music-spectrum", opts)
         else:
             target = max(1, opts.get("target", 25))
             viewers = 1 if opts.get("metric") == "Seguidores" else 3
@@ -359,6 +371,62 @@ class OverlayPreview(QWidget):
             bar.setWidth(bar.width() * min(viewers / target, 1))
             p.setBrush(QColor(s["accent"]))
             p.drawRoundedRect(bar, 8, 8)
+
+    def _music(self, p, spectrum: bool, opts: dict):
+        width = max(200, opts["width"] * _W / 100)
+        height = 78
+        placement = opts["position"]
+        x = _W - width - 25 if placement.endswith("derecha") else 25
+        y = 25 if placement.startswith("Arriba") else _H - height - 25
+        rect = QRectF(x, y, width, height)
+        accent, second, fill = (QColor(opts[key]) for key in ("accent", "secondary", "background"))
+        fill.setAlpha(round(opts["opacity"] * 255 / 100))
+        p.setBrush(fill)
+        p.setPen(QPen(accent, 1))
+        tick = self._clock.elapsed() if self.phase == "hold" and opts.get("motion") else 0
+        if spectrum:
+            edge = 10
+            p.drawPolygon(QPolygonF([QPointF(x, y), QPointF(rect.right() - edge, y),
+                                     QPointF(rect.right(), y + edge), rect.bottomRight(),
+                                     QPointF(x + edge, rect.bottom()), QPointF(x, rect.bottom() - edge)]))
+            p.setPen(Qt.NoPen)
+            p.setBrush(second)
+            p.drawRect(QRectF(x + 1, y + 2, 3, height - 13))
+            meter = QRectF(x + 12, y + 13, 62, height - 26)
+            p.setBrush(QColor("#141a26"))
+            p.drawRoundedRect(meter, 2, 2)
+            gradient = QLinearGradient(meter.topLeft(), meter.bottomLeft())
+            gradient.setColorAt(0, second)
+            gradient.setColorAt(1, accent)
+            p.setBrush(gradient)
+            for i in range(9):
+                bar = 16 + 28 * abs(sin(1.57 + i * .83 + tick / 220))
+                p.drawRoundedRect(QRectF(meter.x() + 6 + i * 5.7, meter.center().y() - bar / 2, 3.7, bar), 1, 1)
+        else:
+            p.drawRoundedRect(rect, 14, 14)
+            center = QPointF(x + 42, y + height / 2)
+            p.setBrush(QColor("#111521"))
+            p.drawEllipse(center, 30, 30)
+            p.setBrush(Qt.NoBrush)
+            p.setPen(QPen(QColor("#3b354f"), 1))
+            for r in (17, 21, 25, 28):
+                p.drawEllipse(center, r, r)
+            p.setPen(QPen(accent, 2))
+            p.drawArc(QRectF(center.x()-25, center.y()-25, 50, 50), round((-35 + tick * .06) * 16), 56 * 16)
+            p.setPen(Qt.NoPen)
+            p.setBrush(accent)
+            p.drawEllipse(center, 12, 12)
+            p.setBrush(second)
+            p.drawEllipse(center, 6, 6)
+            p.setBrush(QColor("#111521"))
+            p.drawEllipse(center, 2.4, 2.4)
+        copy = rect.adjusted(88, 9, -11, 0)
+        self._text(p, copy, "AHORA SUENA  ·  PRUEBA", 11, second, bold=True)
+        title = QFontMetricsF(self._font(23, True)).elidedText(
+            "Órbita de medianoche", Qt.TextElideMode.ElideRight, copy.width())
+        self._text(p, copy.adjusted(0, 17, 0, 0), title, 23, "#f9fafe", bold=True)
+        if opts.get("showArtist"):
+            self._text(p, copy.adjusted(0, 43, 0, 0), "Luna Vector", 14, "#dedff1")
 
     def paintEvent(self, _event):
         p = QPainter(self)

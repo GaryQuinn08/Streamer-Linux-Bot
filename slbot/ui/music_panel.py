@@ -8,17 +8,19 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QCheckBox, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
-    QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
+    QListWidget, QListWidgetItem, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from ..connectors.oauth import deployment_setting
+from ..now_playing import BOT_SOURCE, MPRIS_PREFIX, available_players
 from .deletion import confirm_delete, delete_shortcut
 
 
 class MusicPanel(QWidget):
     open_requested = Signal(str, object)
     operation_done = Signal(str)
+    players_found = Signal(object)
 
     def __init__(self, rt) -> None:
         super().__init__()
@@ -28,7 +30,48 @@ class MusicPanel(QWidget):
         self._queue_rows = ()
         self.open_requested.connect(self._open_in_desktop, Qt.ConnectionType.QueuedConnection)
         self.operation_done.connect(self._complete)
-        outer = QVBoxLayout(self)
+        frame = QVBoxLayout(self)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        scroll.setWidget(content)
+        frame.addWidget(scroll)
+        outer = QVBoxLayout(content)
+
+        now = QGroupBox("Ahora suena · información para overlays")
+        block = QVBoxLayout(now)
+        notice = QLabel(
+            "Comparte solo título, artista y estado; no conecta cuentas ni transmite el audio. "
+            "Si eliges un navegador, puede mostrar los títulos de videos o pestañas privadas. "
+            "Usa un reproductor dedicado para evitar mostrarlos."
+        )
+        notice.setWordWrap(True)
+        block.addWidget(notice)
+        self.share_now = QCheckBox("Mostrar el tema del reproductor elegido en mis overlays")
+        self.share_now.setChecked(rt.now_playing.settings.enabled)
+        self.share_now.toggled.connect(lambda _checked: self.refresh())
+        block.addWidget(self.share_now)
+        row = QHBoxLayout()
+        self.player = QComboBox()
+        self.player.setAccessibleName("Reproductor que se mostrará en los overlays")
+        self.player.currentIndexChanged.connect(lambda _index: self.refresh())
+        row.addWidget(self.player, stretch=1)
+        self.find_players = QPushButton("Buscar reproductores")
+        self.find_players.clicked.connect(self._search_players)
+        row.addWidget(self.find_players)
+        self.save_player = QPushButton("Guardar Ahora suena")
+        self.save_player.clicked.connect(self._save_player)
+        row.addWidget(self.save_player)
+        block.addLayout(row)
+        self.now_status = QLabel()
+        self.now_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.now_status.setWordWrap(True)
+        block.addWidget(self.now_status)
+        self.player_status = QLabel()
+        self.player_status.setWordWrap(True)
+        block.addWidget(self.player_status)
+        outer.addWidget(now)
+        self.players_found.connect(self._populate_players)
 
         spotify = QGroupBox("Spotify · escucha privada")
         block = QVBoxLayout(spotify)
@@ -116,9 +159,23 @@ class MusicPanel(QWidget):
         timer = QTimer(self)
         timer.timeout.connect(self.refresh)
         timer.start(300)
+        self._populate_players(None)
         self.refresh()
 
     def refresh(self):
+        if self.player.count():
+            self.save_player.setEnabled(not self._pending and
+                                        (not self.share_now.isChecked() or bool(self.player.currentData())))
+        selection = self.rt.now_playing.settings
+        snapshot = self.rt.now_playing.snapshot()
+        if not selection.enabled:
+            self.now_status.setText("No se comparte información.")
+        elif not snapshot["title"]:
+            self.now_status.setText("Activado · esperando una pista del reproductor seleccionado.")
+        else:
+            label = "En pausa" if snapshot["state"] == "paused" else "Reproduciendo"
+            artist = f' · {snapshot["artist"]}' if snapshot["artist"] else ""
+            self.now_status.setText(f'{label}: {snapshot["title"]}{artist}')
         permitted = self.private.isChecked()
         self.connect.setEnabled(permitted and not self.spotify.busy and not self.spotify.connected)
         self.stop.setEnabled(self.spotify.busy or self.spotify.connected)
@@ -143,6 +200,46 @@ class MusicPanel(QWidget):
         self._queue_buttons()
         error = self.rt.music.last_error
         self.local_status.setText(f"{current} · {len(rows)} en cola" + (f" · {error}" if error else ""))
+
+    def _populate_players(self, players):
+        selected = self.player.currentData() or self.rt.now_playing.settings.source
+        names = set(players or ())
+        if selected and selected.startswith(MPRIS_PREFIX):
+            names.add(selected)
+        self.player.blockSignals(True)
+        self.player.clear()
+        self.player.addItem("Elige un reproductor…", "")
+        self.player.addItem("Cola de audio de Streamer Linux Bot (mpv)", BOT_SOURCE)
+        for name in sorted(names):
+            label = name.removeprefix(MPRIS_PREFIX)
+            if players is not None and name not in players:
+                label += " (no detectado)"
+            self.player.addItem(label, name)
+        index = self.player.findData(selected)
+        self.player.setCurrentIndex(max(index, 0))
+        self.player.blockSignals(False)
+        if players is not None:
+            self.player_status.setText(
+                "" if players else "No se detectaron reproductores externos. Reproduce algo en la misma sesión de Linux y vuelve a buscar."
+            )
+        self.find_players.setEnabled(True)
+        self.refresh()
+
+    def _search_players(self):
+        self.find_players.setEnabled(False)
+        self.player_status.setText("Buscando reproductores en esta sesión de Linux…")
+
+        async def search():
+            self.players_found.emit(await available_players())
+
+        self.rt.submit(search())
+
+    def _save_player(self):
+        if self.save_player.isEnabled():
+            self._operate(
+                self.rt.configure_now_playing(self.share_now.isChecked(), self.player.currentData() or ""),
+                "Preferencia de Ahora suena guardada.",
+            )
 
     def _queue_buttons(self):
         self.remove_button.setEnabled(not self._pending and self.pending_list.currentItem() is not None

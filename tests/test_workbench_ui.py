@@ -44,16 +44,50 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(view.action_table.rowCount(), 3)
         self.assertEqual(view.action.id, "alert-gift")
         self.assertEqual(view.trigger_table.rowCount(), 1)
-        self.assertEqual(view.trigger_table.item(0, 2).text(), "gift")
+        self.assertEqual(view.trigger_table.item(0, 2).text(), "Regalo")
         view.action_table.selectRow(1)
-        self.assertEqual(view.trigger_table.item(0, 2).text(), "follow")
+        self.assertEqual(view.trigger_table.item(0, 2).text(), "Nuevo seguidor")
         view.filter.setText("DONACIÓN")
         self.assertEqual(view.action_table.rowCount(), 1)
-        self.assertEqual(view.trigger_table.item(0, 2).text(), "donation")
+        self.assertEqual(view.trigger_table.item(0, 2).text(), "Donación")
         view.filter.setText("no existe")
         self.assertEqual(view.trigger_table.rowCount(), 0)
         self.assertEqual(view.step_table.rowCount(), 0)
         self.assertFalse(view.trigger_tools[0].isEnabled())
+
+    def test_trigger_catalog_explains_command_roles_and_preserves_advanced_codes(self):
+        from slbot.ui.main_window import LogBridge
+        from slbot.ui.rule_editor import RulesPanel, TriggerForm
+
+        bridge = LogBridge()
+        view = RulesPanel(self.rt, "trigger", bridge.rules_changed)
+        self.addCleanup(view.close)
+        view.search.setText("tiktok")
+        self.assertEqual(view.list.count(), 1)
+        self.assertIn("→ Alerta de regalo", view.list.item(0).text())
+        config = {"name": "cmd", "event_type": "gift", "platform": "twitch"}
+        form = TriggerForm(view, config, self.rt.config.actions)
+        self.addCleanup(form.close)
+        self.assertIn("no entrega", form.event_help.text())
+        self.assertFalse(form.form.isRowVisible(form.permission))
+        form.event.setCurrentIndex(form.event.findData("command"))
+        self.assertTrue(form.form.isRowVisible(form.permission))
+        form.permission.setCurrentIndex(form.permission.findData("staff"))
+        form.accept()
+        self.assertEqual(form.result_data["chat_permission"], "staff")
+        self.assertEqual(form.result_data["event_type"], "command")
+        form.platform.setCurrentIndex(form.platform.findData("tiktok"))
+        self.assertTrue(form.form.isRowVisible(form.permission))
+        self.assertIn("permiso actual", form.event_help.text())
+        with patch("slbot.ui.rule_editor.QMessageBox.warning") as warning:
+            form.accept()
+        warning.assert_called_once()
+        form.permission.setCurrentIndex(form.permission.findData("everyone"))
+        self.assertFalse(form.form.isRowVisible(form.permission))
+        advanced = TriggerForm(view, {**config, "event_type": "old-hook"}, self.rt.config.actions)
+        self.addCleanup(advanced.close)
+        advanced.accept()
+        self.assertEqual(advanced.result_data["event_type"], "old-hook")
 
     def test_reordering_and_adding_a_scoped_trigger_persist(self):
         from slbot.ui.main_window import LogBridge

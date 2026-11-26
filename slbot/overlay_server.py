@@ -18,6 +18,7 @@ from aiohttp import web
 
 from .chat_dock import ChatDock, load_key
 from .core.events import Event
+from .now_playing import clean_metadata
 from .overlay_manager import find_overlay, list_overlays, validate_overlay_values
 from .paths import SDK_DIR, config_dir
 
@@ -26,6 +27,7 @@ if TYPE_CHECKING:
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost"}
 CHAT_PLATFORMS = ("twitch", "youtube", "kick", "tiktok")
+NOW_PLAYING_IDS = ("now-playing", "now-playing-spectrum")
 FEED_FIELDS = {
     "chat": ("text",),
     "gift": ("gift_name", "count"),
@@ -55,6 +57,7 @@ class OverlayServer:
                 web.get("/", self._index),
                 web.get("/ws/{id}", self._ws),
                 web.get("/sdk/overlay-sdk.js", self._sdk),
+                web.get(r"/sdk/{asset:now-playing\.(?:css|js)}", self._now_playing_asset),
                 web.get("/api/overlays", self._api_overlays),
                 web.get("/overlay/{id}", self._redirect_slash),
                 web.get("/overlay/{id}/", self._overlay_file),
@@ -98,6 +101,45 @@ class OverlayServer:
         for ws, result in zip(clients, results):
             if isinstance(result, Exception):
                 self.clients.pop(ws, None)
+
+    def _now_playing_message(self) -> dict[str, str]:
+        service = getattr(self.rt, "now_playing", None)
+        snapshot = service.snapshot() if service is not None else {}
+        title = clean_metadata(snapshot.get("title"), 110)
+        state = snapshot.get("state")
+        if state not in ("playing", "paused") or not title:
+            return {"channel": "now-playing", "state": "idle", "title": "", "artist": ""}
+        return {"channel": "now-playing", "state": state, "title": title,
+                "artist": clean_metadata(snapshot.get("artist"), 90)}
+
+    async def broadcast_now_playing(self) -> None:
+        message = self._now_playing_message()
+        await asyncio.gather(*(self.broadcast(overlay, message) for overlay in NOW_PLAYING_IDS))
+
+    def _now_playing_settings(self, overlay_id: str) -> dict:
+        info = find_overlay(overlay_id)
+        raw = self.rt.config.settings.get("overlay_presets", {})
+        saved = raw.get(overlay_id, {}) if isinstance(raw, dict) else {}
+        values = {}
+        if info is not None and isinstance(saved, dict):
+            for key, value in saved.items():
+                try:
+                    values.update(validate_overlay_values(info, {key: value}))
+                except (TypeError, ValueError):
+                    continue
+        return {"channel": "now-playing-settings", "values": values}
+
+    async def broadcast_now_playing_settings(self, overlay_id: str) -> None:
+        if overlay_id in NOW_PLAYING_IDS:
+            await self.broadcast(overlay_id, self._now_playing_settings(overlay_id))
+
+    async def preview_now_playing(self, overlay_id: str) -> None:
+        if overlay_id in NOW_PLAYING_IDS:
+            await self.broadcast(overlay_id, {"channel": "now-playing-preview", "state": "playing",
+                                 "title": "Órbita de medianoche", "artist": "Luna Vector"})
+
+    async def _now_playing_asset(self, request: web.Request) -> web.StreamResponse:
+        return web.FileResponse(SDK_DIR / request.match_info["asset"], headers=NO_STORE)
 
     async def forward_event(self, ev: Event) -> None:
         # Los overlays integrados reciben solo campos de presentación.
@@ -182,6 +224,9 @@ class OverlayServer:
                 await ws.send_str(json.dumps({
                     "channel": "chat-settings", "values": values if isinstance(values, dict) else {},
                 }))
+            elif overlay_id in NOW_PLAYING_IDS:
+                await ws.send_json(self._now_playing_settings(overlay_id))
+                await ws.send_json(self._now_playing_message())
             async for _ in ws:  # los overlays solo escuchan; se ignora lo que envíen
                 pass
         finally:

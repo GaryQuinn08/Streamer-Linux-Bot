@@ -187,6 +187,7 @@ class MusicQueue:
         self._ids = count()
         self._pending: tuple[tuple[int, str], ...] = ()
         self.worker: asyncio.Task | None = None
+        self.now_playing_title = ""
         self.current = ""
         self.last_error = ""
 
@@ -224,6 +225,7 @@ class MusicQueue:
                 if isinstance(track, HostedAudio):
                     with tempfile.TemporaryDirectory(prefix="slb-audio-") as folder:
                         path, format_name = await _download_audio(track, Path(folder))
+                        self.now_playing_title = "Audio autorizado"
                         self.rt.log(f"Música: reproduciendo «{track.name}».")
                         code = await run_process(
                             mpv, "--no-config", "--no-video", "--no-ytdl", "--load-unsafe-playlists=no",
@@ -231,6 +233,7 @@ class MusicQueue:
                             "--demuxer-lavf-o=protocol_whitelist=file", "--", str(path),
                         )
                 else:
+                    self.now_playing_title = track.stem
                     self.rt.log(f"Música: reproduciendo «{track.name}».")
                     code = await run_process(mpv, "--no-config", "--no-video", "--no-ytdl", "--", str(track))
                 if code:
@@ -244,6 +247,7 @@ class MusicQueue:
                     self.rt.log(f"Música: {error}")
                 if self.worker is asyncio.current_task():
                     self.last_error = error
+                    self.now_playing_title = ""
                     self.current = ""
                 self.items.task_done()
 
@@ -267,6 +271,7 @@ class MusicQueue:
             self.items.task_done()
         self._pending = ()
         worker, self.worker = self.worker, None
+        self.now_playing_title = ""
         self.last_error = ""
         self.current = ""
         if worker is not None:

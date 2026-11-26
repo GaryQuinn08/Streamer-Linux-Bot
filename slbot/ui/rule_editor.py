@@ -15,9 +15,12 @@ from PySide6.QtWidgets import (
 
 from ..connectors.simulator import sample_event
 from ..core.config import Action
+from ..core.action_pack import ActionPack
 from ..core.editing import STEP_FIELDS, action_callers, action_references
 from ..core.flow import OPERATORS, VALUELESS_OPERATORS, validate_steps
+from ..core.trigger_catalog import CHAT_PERMISSIONS, EVENTS, PLATFORMS, event_hint, event_label
 from ..overlay_manager import list_overlays
+from ..overlay_server import NOW_PLAYING_IDS
 from .deletion import confirm_delete, delete_shortcut
 
 
@@ -88,15 +91,19 @@ class Form(QDialog):
 
 class TriggerForm(Form):
     def __init__(self, parent, data, actions, *, fixed_action=False):
-        super().__init__(parent, "Editar trigger")
+        super().__init__(parent, "Configurar disparador")
         self.original = data
         self.name = QLineEdit(data.get("name", ""))
         self.enabled = QCheckBox()
         self.enabled.setChecked(data.get("enabled", True))
-        choices = [("*", "*")] + [(p, p) for p in ("tiktok", "twitch", "youtube", "kick", "manual")]
-        self.platform = combo(choices, data.get("platform", "*"))
-        names = ("gift", "follow", "chat", "command", "donation", "bits", "points", "like", "share", "sub")
-        self.event = combo([(n, n) for n in names], data.get("event_type", "gift"), editable=True)
+        self.platform = combo([(label, key) for key, label in PLATFORMS.items()], data.get("platform", "*"))
+        choices = [(label, key) for key, (label, _) in EVENTS.items()]
+        self.event = combo(choices, data.get("event_type", "gift"))
+        self.advanced_event = QLineEdit()
+        self.advanced_event.setPlaceholderText("Código del evento")
+        self.event.addItem("Evento avanzado…", "")
+        self.permission = combo([(label, key) for key, label in CHAT_PERMISSIONS.items()],
+                                data.get("chat_permission", "everyone"))
         self.action = combo([(a.name, a.id) for a in actions], data.get("action_id"))
         self.action.setEnabled(not fixed_action)
         self.cooldown = QDoubleSpinBox()
@@ -107,9 +114,18 @@ class TriggerForm(Form):
         self.user_cooldown.setRange(0, 86400)
         self.user_cooldown.setValue(data.get("user_cooldown_s", 0))
         self.user_cooldown.setSuffix(" s")
-        for label, widget in (("Nombre", self.name), ("Activo", self.enabled), ("Plataforma (* = todas)", self.platform),
-                              ("Evento", self.event), ("Acción", self.action), ("Espera global", self.cooldown),
-                              ("Espera por usuario", self.user_cooldown)):
+        guide = QLabel("Cuando ocurra este evento y se cumplan los filtros, el bot ejecutará la acción elegida.")
+        guide.setWordWrap(True)
+        self.form.addRow(guide)
+        for label, widget in (("Nombre de la regla", self.name), ("Activo", self.enabled),
+                              ("Plataforma", self.platform), ("Evento", self.event),
+                              ("Código personalizado", self.advanced_event)):
+            self.form.addRow(label, widget)
+        self.event_help = QLabel()
+        self.event_help.setWordWrap(True)
+        self.form.addRow(self.event_help)
+        for label, widget in (("Acción a ejecutar", self.action), ("Espera global", self.cooldown),
+                              ("Espera por usuario", self.user_cooldown), ("Quién puede activarlo", self.permission)):
             self.form.addRow(label, widget)
         self.filters = {}
         for key, label in (("gift_name", "Regalo exacto"), ("user", "Usuario exacto"), ("contains", "Texto contiene"),
@@ -121,7 +137,33 @@ class TriggerForm(Form):
         self.aliases.setMaxLength(850)
         self.aliases.setPlaceholderText("Ej. hola, saludo, buenas")
         self.form.addRow("Alias del comando", self.aliases)
+        self.event.currentIndexChanged.connect(self._refresh_fields)
+        self.platform.currentIndexChanged.connect(self._refresh_fields)
+        self.permission.currentIndexChanged.connect(self._refresh_fields)
+        self._refresh_fields()
         self.finish()
+
+    def _refresh_fields(self, *_):
+        key = self.event.currentData()
+        platform = self.platform.currentData()
+        self.form.setRowVisible(self.advanced_event, key == "")
+        hint = event_hint(key, platform)
+        self.permissions_available = key in {"command", "chat"} and platform in {"*", "twitch", "youtube"}
+        restricted = self.permission.currentData() != "everyone"
+        self.form.setRowVisible(self.permission, self.permissions_available or restricted)
+        if self.permissions_available:
+            hint += " Los roles se comprueban solo en Twitch y YouTube."
+        elif restricted:
+            hint += " El permiso actual no se puede comprobar en este evento. Cámbialo explícitamente o elige otro evento."
+        self.event_help.setText(hint)
+        self.form.setRowVisible(self.aliases, key == "command" or bool(self.aliases.text()))
+        relevant = {
+            "gift_name": key == "gift", "user": True,
+            "contains": key in {"chat", "command", "donation", "bits", "points"},
+            "command": key == "command", "min_value": key in {"gift", "donation", "bits"},
+        }
+        for field, widget in self.filters.items():
+            self.form.setRowVisible(widget, relevant[field] or bool(widget.text()))
 
     def accept(self):
         filters = dict(self.original.get("filters", {}))
@@ -133,7 +175,15 @@ class TriggerForm(Form):
         aliases = list(dict.fromkeys(
             value.strip().removeprefix("!").casefold() for value in self.aliases.text().split(",") if value.strip()
         ))
-        event_type = self.event.currentText().strip()
+        event_type = self.event.currentData() or self.advanced_event.text().strip()
+        if not event_type:
+            QMessageBox.warning(self, "Evento", "Elige un evento o escribe su código.")
+            return
+        permission = self.permission.currentData()
+        if permission != "everyone" and not self.permissions_available:
+            QMessageBox.warning(self, "Permiso del chat",
+                                "Conserva un evento de Twitch o YouTube o elige explícitamente «Cualquier persona».")
+            return
         filters.pop("command_aliases", None)
         if aliases:
             if event_type != "command" or len(aliases) > 20 or any(
@@ -155,7 +205,8 @@ class TriggerForm(Form):
         self.result_data = {**self.original, "name": self.name.text(), "enabled": self.enabled.isChecked(),
                             "platform": self.platform.currentData(), "event_type": event_type,
                             "action_id": self.action.currentData(), "cooldown_s": self.cooldown.value(),
-                            "user_cooldown_s": self.user_cooldown.value(), "filters": filters}
+                            "user_cooldown_s": self.user_cooldown.value(), "filters": filters,
+                            "chat_permission": permission}
         super().accept()
 
 
@@ -185,7 +236,7 @@ class StepForm(Form):
                 row = widget
             elif mode == "overlay":
                 widget = combo([(o.name, o.id) for o in list_overlays().values()
-                                if o.id not in {"event-feed", "live-goal", "multi-chat"}], value)
+                                if o.id not in {"event-feed", "live-goal", "multi-chat", *NOW_PLAYING_IDS}], value)
                 row = widget
             elif mode in {"action", "optional_action"}:
                 options = [("Elige una acción" if mode == "action" else "No hacer nada", "")]
@@ -239,16 +290,17 @@ class StepForm(Form):
             value = field.isChecked() if mode == "bool" else (
                 field.currentData() if mode in {"overlay", "action", "optional_action", "operator"} else field.text().strip()
             )
-            if mode in {"required", "file", "number", "overlay", "action"} and not value:
+            if mode in {"required", "file", "number", "db", "overlay", "action"} and not value:
                 QMessageBox.warning(self, "Paso incompleto", f"Completa el campo «{key}».")
                 return
-            if mode == "number":
+            if mode in {"number", "db"}:
+                low, high, unit = (-100, 0, "dB") if mode == "db" else (0, 3600, "segundos")
                 try:
                     value = float(value)
-                    if not math.isfinite(value) or not 0 <= value <= 3600:
+                    if not low <= value <= high:
                         raise ValueError()
                 except (TypeError, ValueError):
-                    QMessageBox.warning(self, "Duración", "Escribe de 0 a 3600 segundos.")
+                    QMessageBox.warning(self, "Valor", f"Escribe de {low} a {high} {unit}.")
                     return
             data[key] = value
         try:
@@ -331,9 +383,16 @@ class RulesPanel(QWidget):
         super().__init__()
         self.rt, self.kind, self.changed = rt, kind, changed
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(
-            "Vincula eventos con acciones. Los filtros vacíos no limitan el evento." if kind == "trigger"
-            else "Los pasos se ejecutan en orden. Puedes usar variables como {user}, {text} y {gift_name}."))
+        hint = QLabel(
+            "Un disparador define cuándo ejecutar una acción. Aquí ves todos; desde Acciones ves solo los de la acción seleccionada."
+            if kind == "trigger" else "Los pasos se ejecutan en orden. Puedes usar variables como {user}, {text} y {gift_name}.")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Buscar por nombre, plataforma, evento o acción")
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(self.refresh)
+        layout.addWidget(self.search)
         self.list = QListWidget()
         layout.addWidget(self.list)
         self.list.itemDoubleClicked.connect(lambda _item: self.edit())
@@ -349,14 +408,29 @@ class RulesPanel(QWidget):
         self.changed.connect(self.refresh)
         self.refresh()
 
-    def refresh(self):
-        self.items = self.rt.config.triggers if self.kind == "trigger" else self.rt.config.actions
-        current = self.list.currentRow()
+    def refresh(self, *_):
+        previous = self.selected() if hasattr(self, "items") else None
+        candidates = self.rt.config.triggers if self.kind == "trigger" else self.rt.config.actions
+        names = {item.id: item.name for item in self.rt.config.actions}
+        query = self.search.text().strip().casefold()
+        labels = []
+        self.items = []
+        for item in candidates:
+            if self.kind == "trigger":
+                title = (f"{item.name} · {PLATFORMS.get(item.platform, item.platform)} / "
+                         f"{event_label(item.event_type)} → {names.get(item.action_id, 'Acción no encontrada')}")
+                if not item.enabled:
+                    title += " · Desactivado"
+                searchable = title + " " + item.event_type
+            else:
+                searchable = title = f"{item.name} · {len(item.steps)} paso(s)"
+            if query in searchable.casefold():
+                self.items.append(item)
+                labels.append(title)
         self.list.clear()
-        for item in self.items:
-            suffix = f" · {item.platform}/{item.event_type}" + ("" if item.enabled else " · desactivado") if self.kind == "trigger" else f" · {len(item.steps)} paso(s)"
-            self.list.addItem(item.name + suffix)
-        self.list.setCurrentRow(min(max(0, current), len(self.items) - 1))
+        self.list.addItems(labels)
+        selected = next((i for i, item in enumerate(self.items) if previous and item.id == previous.id), 0)
+        self.list.setCurrentRow(selected if self.items else -1)
 
     def selected(self):
         i = self.list.currentRow()
@@ -438,6 +512,14 @@ class ActionWorkspace(QWidget):
         action_toolbar = [("+ Acción", lambda: self.edit_action(True)),
                           ("Editar", self.edit_action), ("Eliminar", self.delete_action)]
         self.action_tools = self._toolbar(action_layout, self.action_table, action_toolbar)
+        self.import_button = QPushButton("Importar…")
+        self.export_button = QPushButton("Exportar…")
+        io_row = QHBoxLayout()
+        io_row.addWidget(self.import_button)
+        io_row.addWidget(self.export_button)
+        action_layout.addLayout(io_row)
+        self.import_button.clicked.connect(self._import_actions)
+        self.export_button.clicked.connect(self._export_action)
         delete_shortcut(self.action_table, self.delete_action)
         if not rt.editor_only:
             self.test_button = QPushButton("Ejecutar con regalo de prueba")
@@ -592,8 +674,8 @@ class ActionWorkspace(QWidget):
             self._selected_id = action_id
         self.triggers = [t for t in self.rt.config.triggers if t.action_id == action_id] if self.action else []
         steps = self.action.steps if self.action else []
-        self._fill(self.trigger_table, [(t.name, "Cualquiera" if t.platform == "*" else t.platform,
-                                         t.event_type, "Activo" if t.enabled else "Inactivo")
+        self._fill(self.trigger_table, [(t.name, PLATFORMS.get(t.platform, t.platform),
+                                         event_label(t.event_type), "Activo" if t.enabled else "Inactivo")
                                         for t in self.triggers], min(self._trigger_selection, len(self.triggers) - 1))
         names = {item.id: item.name for item in self.rt.config.actions}
         def detail(step):
@@ -619,8 +701,53 @@ class ActionWorkspace(QWidget):
         for button, state in zip(self.step_tools, (has_action, row >= 0, row >= 0, row > 0,
                                                    0 <= row < self.step_table.rowCount() - 1)):
             button.setEnabled(state)
+        self.export_button.setEnabled(has_action)
         if hasattr(self, "test_button"):
             self.test_button.setEnabled(has_action)
+
+    def _export_action(self):
+        if not self.action:
+            return
+        try:
+            content = ActionPack.export_selected(self.rt.config, self.action.id)
+            path, _ = QFileDialog.getSaveFileName(self, "Exportar acción y referencias", "acciones.slbactions",
+                                                      "Paquete de acciones (*.slbactions)")
+            if not path:
+                return
+            Path(path).write_bytes(content)
+        except (ValueError, OSError) as exc:
+            self.notice.setText(str(exc))
+        else:
+            self.notice.setText("Paquete guardado. Revisa los textos y nombres antes de compartirlo.")
+
+    def _import_actions(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Importar paquete de acciones", "",
+                                             "Paquete de acciones (*.slbactions)")
+        if not path:
+            return
+        try:
+            pack = ActionPack.read(Path(path))
+        except (ValueError, OSError) as exc:
+            self.notice.setText(str(exc))
+            return
+        names = ", ".join(action.name for action in pack.actions[:5])
+        if len(pack.actions) > 5:
+            names += f" y {len(pack.actions) - 5} más"
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle("Revisar paquete de acciones")
+        dialog.setTextFormat(Qt.TextFormat.PlainText)
+        dialog.setText(f"Acciones ({len(pack.actions)}): {names}\nDisparadores ({len(pack.triggers)}): "
+                       "se importan desactivados.\nNo se reemplaza ni ejecuta nada. Revísalos antes de activarlos.")
+        dialog.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        dialog.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        if dialog.exec() != QMessageBox.StandardButton.Ok:
+            return
+        self.filter.clear()
+
+        async def import_to_profile():
+            pack.install(self.rt.config)
+
+        self._send(import_to_profile(), "action")
 
     def _send(self, coro, kind):
         self.setEnabled(False)

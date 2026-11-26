@@ -10,7 +10,7 @@ Este inventario compara familias de funciones públicas, no afirma compatibilida
 | YouTube | Streamer.bot abre Google OAuth para la cuenta principal y, opcionalmente, la del bot. | Distribuir un cliente de escritorio del proyecto, consentimientos y permisos de YouTube aprobados según el caso. Probar canales personales y de marca. | Navegador y recepción experimental; no hay cliente de distribución ni prueba real. |
 | Kick | Streamer.bot usa OAuth más su integración web para reenviar webhooks. | La instalación normal no debe pedir un servidor público al streamer. Para ofrecerlo, el proyecto necesita un retransmisor HTTPS con firma verificada, asociación por canal y autorización. El receptor autogestionado permanece opcional. | Receptor firmado experimental; no hay vinculación/servicio alojado. |
 | TikTok | TikFinity web combina una sesión de su producto con el @usuario del LIVE. Su cliente local ofrece funciones adicionales para escribir en chat y exponer eventos. | Ofrecer **Escuchar LIVE** con el @usuario como modo principal en Linux, indicar si aún no está en vivo, y conservar TikFinity como puente opcional. No tratar la lectura pública como autorización para escribir al chat. | Lectura directa no oficial de chat, seguidores y regalos; prueba real pendiente. No requiere cuenta de TikFinity. |
-| Spotify | TikFinity ofrece solicitudes de canciones tras enlazar Spotify. | Separar escucha privada de fuentes autorizadas para retransmitir. No exigir Spotify para instalar, escuchar TikTok ni lanzar alertas. | La beta solo controla una cola privada cuando se configura Spotify. Sin integración pública ni solicitudes de chat. |
+| Spotify | TikFinity ofrece solicitudes de canciones tras enlazar Spotify. | Separar escucha privada de fuentes autorizadas para retransmitir. No exigir Spotify para instalar, escuchar TikTok ni lanzar alertas. | La beta solo controla una cola privada cuando se configura Spotify. Overlay de título/artista opcional, con la cola local o reproductores de Linux mediante MPRIS. Sin reproducción pública de servicios comerciales ni solicitudes desde el chat. |
 
 Documentación oficial: [Twitch en Streamer.bot](https://docs.streamer.bot/guide/platforms/twitch), [YouTube](https://docs.streamer.bot/guide/platforms/youtube/), [Kick](https://docs.streamer.bot/guide/platforms/kick), [conexión a TikFinity](https://tikfinity.zerody.one/landing/#faq), [PKCE de Twitch](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/#pkce-enhanced-authorization-code-grant-flow), [modos de Spotify](https://developer.spotify.com/documentation/web-api/concepts/quota-modes). Los datos de registro del proyecto se mantienen fuera de la interfaz del streamer; ver [guía de mantenimiento](OAUTH.md).
 
@@ -20,11 +20,11 @@ Documentación oficial: [Twitch en Streamer.bot](https://docs.streamer.bot/guide
 |---|---|---|
 | [Acciones, colas e historial](https://docs.streamer.bot/guide/core/actions) | Tres paneles, varias reglas por acción, subacciones ordenadas, prueba manual, historial de sesión con duración y resultado, temporizadores periódicos y colas con nombre en orden de llegada. El historial permite pausar nuevos inicios y cancelar ejecuciones. | Grupos de acciones, pausa por cola y reintentos. |
 | [Disparadores](https://docs.streamer.bot/api/triggers) y [subacciones](https://docs.streamer.bot/api/sub-actions) | Eventos normalizados, filtros y cooldown por regla. Pasos de sonido, voz, alerta, OBS, espera, audio autorizado y registro; condiciones con dos ramas y llamadas a otras acciones en la misma ejecución. | Valores persistentes, eventos de OBS, temporizadores por actividad de chat y audio avanzado; catalogar por conector antes de añadir tipos sin fuente real. |
-| [Comandos](https://docs.streamer.bot/guide/core/commands), [variables](https://docs.streamer.bot/guide/core/variables), [temporizadores](https://docs.streamer.bot/guide/core/timers) y [chat](https://docs.streamer.bot/guide/extra-features/chat/) | Lectura unificada, filtro por plataforma, overlay multichat y envío manual a Twitch. Comandos entrantes con `!`, alias y espera global o por usuario de cada disparador, y plantillas del evento. | Respuestas automáticas, envío a otras plataformas, moderación, permisos por rol/grupo, variables globales/por usuario, temporizadores por actividad de chat, citas, créditos e interacciones con espectadores. |
+| [Comandos](https://docs.streamer.bot/guide/core/commands), [variables](https://docs.streamer.bot/guide/core/variables), [temporizadores](https://docs.streamer.bot/guide/core/timers) y [chat](https://docs.streamer.bot/guide/extra-features/chat/) | Lectura unificada, filtro por plataforma, overlay multichat y envío manual a Twitch. Comandos entrantes con `!`, alias y espera global o por usuario; permisos por rol del chat para Twitch y YouTube, y plantillas del evento. | Respuestas automáticas, envío a otras plataformas, moderación, grupos propios y permisos de rol fuera de Twitch/YouTube, variables globales/por usuario, temporizadores por actividad de chat, citas, créditos e interacciones con espectadores. |
 | [Overlays de TikFinity](https://tikfinity.zerody.one/tiktok/obsoverlays) | Catálogo con URL individual para OBS y LIVE Studio, alertas editables/importables, actividad, chat multiplataforma y meta de regalos o seguidores de TikTok. | Metas de likes, monedas y suscripciones, ranking, alertas más ricas, marcos y animaciones. Ya se pueden añadir overlays HTML propios; no se promete importar enlaces alojados de TikFinity. |
 | [TikFinity: sonidos, TTS, comunidad y juegos](https://tikfinity.zerody.one/landing/) | Alerta por regalo, sonido y TTS desde acciones; eventos de prueba. | Varias reglas rápidas por regalo, cola de voces con filtros y moderación, puntos y niveles, historial de espectadores, rueda, retos y subatón, controles de juego con permiso explícito. |
-| [Aplicaciones y APIs de Streamer.bot](https://docs.streamer.bot/) | OBS cambia escena o visibilidad; LIVE Studio por fuente Enlace si está disponible; WebSocket de overlays solo local. Perfiles de escritorio y headless en Linux. | Más controles de OBS (audio, filtros, medios, grabación), Streamlabs, Meld y PolyPop; controladores Stream Deck, MIDI, teclas, voz; API externa autenticada y extensiones aisladas. LIVE Studio por enlace no implica control de escenas. |
-| [Intercambio de acciones](https://docs.streamer.bot/guide/core/import-export) | Importación validada de overlays, no de acciones de terceros. | Paquetes nativos de acciones, copias/restauración y previsualización antes de importar. No ejecutar C# ni macros de paquetes ajenos; traducir solo tipos compatibles cuando exista un importador. |
+| [Aplicaciones y APIs de Streamer.bot](https://docs.streamer.bot/) | OBS cambia escena, visibilidad, volumen, silencio, filtros y reinicia medios; LIVE Studio por fuente Enlace si está disponible; WebSocket de overlays solo local. Perfiles de escritorio y headless en Linux. | Más controles y eventos de OBS (grabación, estado de medios y escenas), Streamlabs, Meld y PolyPop; controladores Stream Deck, MIDI, teclas, voz; API externa autenticada y extensiones aisladas. LIVE Studio por enlace no implica control de escenas. |
+| [Intercambio de acciones](https://docs.streamer.bot/guide/core/import-export) | Importación validada de overlays y paquetes nativos de acciones con revisión previa; sus disparadores importados quedan apagados. | Copia/restauración del perfil completo y traducción de formatos de terceros. No ejecutar C# ni macros de paquetes ajenos; traducir solo tipos compatibles cuando exista un importador. |
 | [Integraciones de Streamer.bot](https://docs.streamer.bot/guide/integrations) | TikFinity como puente y adaptación a eventos comunes. | Donaciones y servicios externos (p. ej., Ko-fi, StreamElements, Streamlabs), Discord y herramientas para stream. Integrar cada una según sus permisos y API. |
 
 ### Prueba rápida de esta beta
@@ -48,5 +48,26 @@ Documentación oficial: [Twitch en Streamer.bot](https://docs.streamer.bot/guide
 5. En **Chat → Probar voz**, verifica que la voz diga «Luna dice…». Con lectura habilitada y una plataforma seleccionada, un mensaje nuevo debe leerse con el nombre que trae su conector.
 
 La beta 20 agrega [condiciones, variables locales y reutilización de acciones](AUTOMATIZACION.md).
-Permisos de comandos y más controles de OBS siguen en el plan, con pruebas por conector. Metas, juegos, puntos,
-integraciones de terceros e intercambio de acciones siguen pendientes.
+La beta 21 añade permisos verificados, más controles de OBS y paquetes de acciones nativos.
+Metas adicionales, juegos, puntos, permisos fuera de Twitch/YouTube e integraciones de terceros siguen pendientes.
+
+
+### Automatización beta 21
+
+- **Disparadores** sirve para buscar el conjunto completo; en **Acciones** se
+  edita la misma regla en el contexto de su acción. No se guardan dos copias.
+  Selecciona un evento para ver qué conectores lo entregan. Un evento avanzado
+  no crea por sí solo una conexión con la plataforma.
+- **Quién puede activarlo** puede exigir titular o moderador en chat/comandos
+  de Twitch y YouTube. El bot usa los datos del servicio, no el nombre
+  visible. Un chat simulado o un rol sin verificar no activa la regla.
+  En Twitch Shared Chat tampoco concede roles de otro canal. Prueba con una
+  cuenta autorizada y otra normal antes de depender de ello en directo.
+- Prueba volumen, silencio, filtros o reinicio de multimedia en una escena
+  de prueba: ejecutar la acción en el bot envía el cambio real a OBS.
+- En **Acciones → Exportar…** puedes guardar la acción seleccionada y sus
+  dependencias en un archivo `.slbactions`. Revisa textos y nombres antes
+  de compartirlo. **Importar…** muestra un resumen y crea copias, nunca
+  reemplaza el perfil ni ejecuta nada; habilita los disparadores solo después
+  de revisarlos. No admite código, archivos locales de audio ni credenciales
+  de perfil, ni paquetes de Streamer.bot o TikFinity.

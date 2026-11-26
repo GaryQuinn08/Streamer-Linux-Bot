@@ -6,7 +6,7 @@ Aplicación de escritorio para Linux que automatiza tu stream: recibe eventos
 (chat, seguidores, regalos, donaciones...), los pasa por **triggers** y ejecuta
 **acciones** (alertas en pantalla, cambios de escena en OBS, sonidos, TTS...).
 
-## Beta 20 para Linux
+## Beta 21 para Linux
 
 Instalación desde el repositorio sin ZIP ni dependencias de Qt de APT.
 Conserva el perfil de la beta anterior, incluido el catálogo y las alertas
@@ -46,6 +46,25 @@ En **Temporizadores**, elige una acción existente, establece el intervalo en se
 y actívalo. La primera ejecución espera un intervalo completo; si la acción anterior
 sigue en curso, no se acumulan ejecuciones. Consulta **Historial** para verificarlo.
 Funcionan mientras el bot esté abierto, o en modo servidor tras recargar el perfil.
+
+### Disparadores, OBS y música
+
+Un disparador indica **cuándo** corre una acción; las subacciones dicen **qué**
+hacer. **Disparadores** lista todas las reglas, con su acción de destino;
+el panel de **Acciones** solo muestra las de la acción seleccionada. El editor
+usa nombres en español, explica qué plataformas envían cada evento y ofrece
+un filtro de titular/moderador para chats de Twitch y YouTube.
+
+Las subacciones de OBS ahora pueden cambiar volumen, silenciar una entrada,
+activar o desactivar un filtro y reiniciar una fuente multimedia. Desde
+**Acciones** también puedes exportar/importar un paquete de acciones nativo;
+los disparadores importados se quedan desactivados hasta que tú los actives.
+
+**Música → Ahora suena** permite elegir un reproductor Linux compatible,
+además de la cola local. Muestra la pista y el artista en un overlay para OBS
+o LIVE Studio: **Vinilo nocturno** y **Espectro neón**. Es solo información
+de la pista; no convierte el audio de un servicio en audio autorizado para
+el directo. [Cómo conectarlo y qué admite](docs/AUDIO.md#mostrar-qué-está-sonando-en-obs-o-live-studio).
 
 ### Editor web y galería
 

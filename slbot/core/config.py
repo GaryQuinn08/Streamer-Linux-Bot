@@ -13,6 +13,7 @@ from typing import Any
 
 from ..paths import config_dir
 from .events import Event
+from .trigger_catalog import CHAT_PERMISSIONS
 
 log = logging.getLogger("slb.config")
 
@@ -30,17 +31,26 @@ class Trigger:
     filters: dict[str, Any] = field(default_factory=dict)
     cooldown_s: float = 0.0
     user_cooldown_s: float = 0.0
+    chat_permission: str = "everyone"
 
     def matches(self, ev: Event) -> bool:
         if self.platform not in ("*", ev.platform):
             return False
         if self.event_type != ev.type:
             return False
+        if self.chat_permission != "everyone":
+            roles = {"staff": ("owner", "moderator"), "owner": ("owner",)}.get(self.chat_permission, ())
+            if (ev.platform not in {"twitch", "youtube"} or ev.type not in {"chat", "command"}
+                    or ev.data.get("simulated") or not ev.actor_id or ev.chat_role not in roles):
+                return False
         f = self.filters
         try:
-            if "min_value" in f and float(ev.data.get("value", 0) or 0) < float(f["min_value"]):
-                return False
-        except (TypeError, ValueError):
+            if "min_value" in f:
+                value = float(ev.data.get("value", 0) or 0)
+                minimum = float(f["min_value"])
+                if not (math.isfinite(value) and math.isfinite(minimum) and value >= minimum):
+                    return False
+        except (TypeError, ValueError, OverflowError):
             return False
         if "gift_name" in f and str(ev.data.get("gift_name", "")).lower() != str(f["gift_name"]).lower():
             return False
@@ -70,6 +80,12 @@ class Trigger:
             raise ValueError("Cooldown inválido")
         if not math.isfinite(user_cooldown) or not 0 <= user_cooldown <= 86400:
             raise ValueError("La espera por usuario debe ser de 0 a 86 400 segundos.")
+        permission = d.get("chat_permission", "everyone")
+        if not isinstance(permission, str) or permission not in CHAT_PERMISSIONS:
+            raise ValueError("Permiso de chat inválido.")
+        if permission != "everyone" and (d.get("event_type") not in {"chat", "command"}
+                                         or d.get("platform", "*") not in {"twitch", "youtube", "*"}):
+            raise ValueError("Los roles solo se verifican en el chat de Twitch y YouTube.")
         filters = dict(d.get("filters", {}))
         if "command_aliases" in filters:
             aliases = filters["command_aliases"]
@@ -88,6 +104,7 @@ class Trigger:
             filters=filters,
             cooldown_s=cooldown,
             user_cooldown_s=user_cooldown,
+            chat_permission=permission,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -103,6 +120,8 @@ class Trigger:
         }
         if self.user_cooldown_s:
             data["user_cooldown_s"] = self.user_cooldown_s
+        if self.chat_permission != "everyone":
+            data["chat_permission"] = self.chat_permission
         return data
 
 

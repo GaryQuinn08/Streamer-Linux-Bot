@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (
 from ..connectors.simulator import SAMPLE_KINDS, sample_event
 from ..overlay_pack import import_pack
 from ..overlay_manager import OverlayInfo, create_alert, import_overlay, list_overlays, validate_overlay_values
+from ..overlay_server import NOW_PLAYING_IDS
 from ..runtime import Runtime
 from .rule_editor import ActionWorkspace, RulesPanel
 from .platform_login import PlatformLoginPanel
@@ -433,7 +434,7 @@ class TriggersTab(QWidget):
         selected = selected or self.destination.currentData()
         self.destination.clear()
         for item in sorted(list_overlays().values(), key=lambda item: item.id != "gift-alert"):
-            if item.id not in {"event-feed", "live-goal", "multi-chat"}:
+            if item.id not in {"event-feed", "live-goal", "multi-chat", *NOW_PLAYING_IDS}:
                 self.destination.addItem(item.name, item.id)
         index = self.destination.findData(selected)
         self.destination.setCurrentIndex(max(index, 0))
@@ -697,6 +698,11 @@ class OverlaysTab(QWidget):
                 "Para quitar los nombres de plataforma sin dejar de mostrar mensajes, desmarca las etiquetas y guarda. "
                 "Si emites simultáneamente en Twitch, usa Solo Twitch en la fuente pública y deja el multichat en privado."
             )
+        elif info.id in NOW_PLAYING_IDS:
+            self.overlay_hint.setText(
+                "Añade esta URL como Fuente de navegador en OBS y activa «Ahora suena» en Música. "
+                "Solo se muestran el título y el artista. Sin reproducción ni portadas; las barras son decorativas."
+            )
         else:
             self.overlay_hint.setText(
                 "Abre la URL en el navegador o como fuente de OBS antes de probar. "
@@ -919,7 +925,12 @@ class OverlaysTab(QWidget):
 
     def _preview(self) -> None:
         if self._info and self.rt.port is not None:
-            self.rt.submit(self.rt.preview_overlay(self._info.id))
+            overlay = self._info.id
+            if overlay in NOW_PLAYING_IDS:
+                self.rt.submit(self.rt.overlays.preview_now_playing(overlay))
+                self.status.setText("Muestra temporal marcada como PRUEBA; no reproduce ni cambia ninguna canción.")
+                return
+            self.rt.submit(self.rt.preview_overlay(overlay))
             self.status.setText("Evento de prueba enviado a la fuente abierta en OBS o en el navegador.")
 
     def _save_preset(self) -> None:
@@ -935,7 +946,12 @@ class OverlaysTab(QWidget):
         overlay_id = self._info.id
         self.save_btn.setEnabled(False)
         self.reset_btn.setEnabled(False)
-        future = self.rt.submit(self.rt.save_overlay_preset(overlay_id, changes))
+        async def save():
+            await self.rt.save_overlay_preset(overlay_id, changes)
+            if overlay_id in NOW_PLAYING_IDS:
+                await self.rt.overlays.broadcast_now_playing_settings(overlay_id)
+
+        future = self.rt.submit(save())
         signal = self.bridge.overlay_saved
 
         def done(completed) -> None:
@@ -954,7 +970,7 @@ class OverlaysTab(QWidget):
             self._build_form(self._info)
         if error:
             self.status.setText(f"No se guardó: {error}")
-        elif overlay_id == "multi-chat":
+        elif overlay_id == "multi-chat" or overlay_id in NOW_PLAYING_IDS:
             self.status.setText("Apariencia guardada. La fuente abierta se actualiza sin cambiar la URL.")
         else:
             self.status.setText("Apariencia guardada. Actualiza la fuente de OBS; la URL no cambia.")

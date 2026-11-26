@@ -1,0 +1,67 @@
+{
+  "id": "now-playing",
+  "name": "Ahora suena · Vinilo nocturno",
+  "description": "Placa nocturna con disco animado. Muestra el título y el artista sin descargar portadas.",
+  "version": "1.0.0",
+  "author": "Streamer Linux Bot",
+  "params": [
+    {
+      "key": "accent",
+      "label": "Color principal",
+      "type": "color",
+      "default": "#b490ff"
+    },
+    {
+      "key": "secondary",
+      "label": "Segundo color",
+      "type": "color",
+      "default": "#ebfc92"
+    },
+    {
+      "key": "background",
+      "label": "Color del fondo",
+      "type": "color",
+      "default": "#121629"
+    },
+    {
+      "key": "opacity",
+      "label": "Opacidad del fondo (%)",
+      "type": "number",
+      "default": 90,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "key": "width",
+      "label": "Ancho del diseño (%)",
+      "type": "number",
+      "default": 34,
+      "min": 17,
+      "max": 85
+    },
+    {
+      "key": "position",
+      "label": "Colocación",
+      "type": "select",
+      "default": "Abajo a la izquierda",
+      "options": [
+        "Abajo a la izquierda",
+        "Abajo a la derecha",
+        "Arriba a la izquierda",
+        "Arriba a la derecha"
+      ]
+    },
+    {
+      "key": "showArtist",
+      "label": "Mostrar artista",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "motion",
+      "label": "Activar animación",
+      "type": "bool",
+      "default": true
+    }
+  ]
+}

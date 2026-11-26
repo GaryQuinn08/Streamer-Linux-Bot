@@ -17,6 +17,15 @@ STEP_FIELDS = {
     "obs_source_visible": ("Mostrar u ocultar fuente de OBS", (
         ("scene", "Escena", "required", ""), ("source", "Fuente", "required", ""),
         ("visible", "Visible", "bool", True))),
+    "obs_input_mute": ("Silenciar o reactivar audio de OBS", (
+        ("source", "Entrada de audio (nombre exacto)", "required", ""), ("muted", "Silenciar", "bool", True))),
+    "obs_input_volume": ("Ajustar volumen de OBS", (
+        ("source", "Entrada de audio (nombre exacto)", "required", ""), ("db", "Volumen, de −100 a 0 dB", "db", -12))),
+    "obs_filter_enabled": ("Activar o desactivar filtro de OBS", (
+        ("source", "Fuente (nombre exacto)", "required", ""), ("filter", "Filtro (nombre exacto)", "required", ""),
+        ("enabled", "Activar", "bool", True))),
+    "obs_media_restart": ("Reiniciar fuente multimedia de OBS", (
+        ("source", "Fuente multimedia (nombre exacto)", "required", ""),)),
     "play_sound": ("Reproducir sonido", (("file", "Archivo", "file", ""),)),
     "tts": ("Leer texto (TTS)", (("text", "Texto", "required", "{text}"),)),
     "music_queue_add": ("Encolar canción local", (("query", "Archivo", "file", ""),)),

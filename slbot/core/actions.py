@@ -125,7 +125,8 @@ async def run_action(rt: "Runtime", action: Action, ev: Event) -> int:
                     raise ValueError(f"tipo desconocido '{step_type}'")
                 literal = {"play_sound": {"file"}, "music_queue_add": {"query"}}.get(str(step_type), set())
                 params = {k: (v if k in literal else render(v, ctx)) for k, v in step.items() if k != "type"}
-                if step_type in ("obs_scene", "obs_source_visible"):
+                if step_type in ("obs_scene", "obs_source_visible", "obs_input_mute", "obs_input_volume",
+                                 "obs_filter_enabled", "obs_media_restart"):
                     # No liberar el bloqueo de OBS antes de concluir la solicitud en curso.
                     request = asyncio.create_task(handler(rt, params, ev))
                     try:
@@ -190,6 +191,32 @@ async def _obs_source_visible(rt: "Runtime", p: dict[str, Any], ev: Event) -> No
     if isinstance(visible, str):
         visible = visible.strip().lower() in ("1", "true", "si", "sí", "yes")
     await rt.obs.set_source_visible(str(p["scene"]), str(p["source"]), bool(visible))
+
+
+def _checked_bool(value: object) -> bool:
+    if type(value) is bool:
+        return value
+    raise ValueError("Elige activar o desactivar en la subacción.")
+
+
+@subaction("obs_input_mute")
+async def _obs_input_mute(rt: "Runtime", p: dict[str, Any], ev: Event) -> None:
+    await rt.obs.set_input_mute(str(p["source"]), _checked_bool(p["muted"]))
+
+
+@subaction("obs_input_volume")
+async def _obs_input_volume(rt: "Runtime", p: dict[str, Any], ev: Event) -> None:
+    await rt.obs.set_input_volume(str(p["source"]), float(p["db"]))
+
+
+@subaction("obs_filter_enabled")
+async def _obs_filter_enabled(rt: "Runtime", p: dict[str, Any], ev: Event) -> None:
+    await rt.obs.set_filter_enabled(str(p["source"]), str(p["filter"]), _checked_bool(p["enabled"]))
+
+
+@subaction("obs_media_restart")
+async def _obs_media_restart(rt: "Runtime", p: dict[str, Any], ev: Event) -> None:
+    await rt.obs.restart_media(str(p["source"]))
 
 
 @subaction("play_sound")

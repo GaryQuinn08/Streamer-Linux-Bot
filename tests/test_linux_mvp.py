@@ -167,6 +167,12 @@ class DebianObsTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("7", status.note)
                 await connector.set_scene("Demo")
                 await connector.set_source_visible("Demo", "Overlay", True)
+                await connector.set_input_mute("Mic", True)
+                await connector.set_input_volume("Mic", -15.5)
+                await connector.set_filter_enabled("Mic", "Compresor", False)
+                await connector.restart_media("Intro")
+                with self.assertRaises(ValueError):
+                    await connector.set_input_volume("Mic", 50)
             finally:
                 await client.disconnect()
             self.assertEqual(requests, [
@@ -175,6 +181,10 @@ class DebianObsTests(unittest.IsolatedAsyncioTestCase):
                 ("SetCurrentProgramScene", {"sceneName": "Demo"}),
                 ("GetSceneItemId", {"sceneName": "Demo", "sourceName": "Overlay"}),
                 ("SetSceneItemEnabled", {"sceneName": "Demo", "sceneItemId": 7, "sceneItemEnabled": True}),
+                ("SetInputMute", {"inputName": "Mic", "inputMuted": True}),
+                ("SetInputVolume", {"inputName": "Mic", "inputVolumeDb": -15.5}),
+                ("SetSourceFilterEnabled", {"sourceName": "Mic", "filterName": "Compresor", "filterEnabled": False}),
+                ("TriggerMediaInputAction", {"inputName": "Intro", "mediaAction": "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART"}),
             ])
         finally:
             await runner.cleanup()

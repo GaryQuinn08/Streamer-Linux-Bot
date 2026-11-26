@@ -18,20 +18,32 @@ from ..core.events import Event
 from ..dashboard import number, timestamp
 
 
-def chat_events(platform: str, user: str, text: str) -> list[Event]:
+def chat_events(platform: str, user: str, text: str, *, actor_id: str = "", chat_role: str = "") -> list[Event]:
     text = text[:500]
-    events = [Event(platform, "chat", user, {"text": text})]
+    events = [Event(platform, "chat", user, {"text": text}, actor_id=actor_id, chat_role=chat_role)]
     if text.startswith("!") and text.split()[0][1:]:
-        events.append(Event(platform, "command", user, {"text": text, "command": text.split()[0][1:]}))
+        events.append(Event(platform, "command", user, {"text": text, "command": text.split()[0][1:]},
+                            actor_id=actor_id, chat_role=chat_role))
     return events
 
 
 def youtube_events(item: dict) -> list[Event]:
     snippet = item.get("snippet") or {}
-    user = str((item.get("authorDetails") or {}).get("displayName", ""))[:100]
+    author = item.get("authorDetails")
+    author = author if isinstance(author, dict) else {}
+    user = str(author.get("displayName", ""))[:100]
     kind = snippet.get("type")
     if kind == "textMessageEvent":
-        return chat_events("youtube", user, str((snippet.get("textMessageDetails") or {}).get("messageText", "")))
+        raw_id = author.get("channelId")
+        actor_id = raw_id if isinstance(raw_id, str) and 0 < len(raw_id) <= 100 else ""
+        role = ""
+        if actor_id and actor_id == snippet.get("authorChannelId"):
+            if author.get("isChatOwner") is True:
+                role = "owner"
+            elif author.get("isChatModerator") is True:
+                role = "moderator"
+        return chat_events("youtube", user, str((snippet.get("textMessageDetails") or {}).get("messageText", "")),
+                           actor_id=actor_id, chat_role=role)
     if kind in {"superChatEvent", "superStickerEvent"}:
         details = snippet.get("superChatDetails") or snippet.get("superStickerDetails") or {}
         try:
@@ -49,7 +61,21 @@ def youtube_events(item: dict) -> list[Event]:
 def twitch_events(kind: str, data: dict) -> list[Event]:
     user = str(data.get("chatter_user_name") or data.get("user_name") or "")[:100]
     if kind == "channel.chat.message":
-        return chat_events("twitch", user, str((data.get("message") or {}).get("text", "")))
+        raw_id = data.get("chatter_user_id")
+        actor_id = raw_id if isinstance(raw_id, str) and 0 < len(raw_id) <= 100 else ""
+        target = data.get("broadcaster_user_id")
+        source = data.get("source_broadcaster_user_id")
+        badges = data.get("badges")
+        role = ""
+        # En Shared Chat no usamos un rango concedido por otro canal.
+        if actor_id and isinstance(target, str) and target and source in (None, "", target):
+            if target == actor_id:
+                role = "owner"
+            elif isinstance(badges, list) and any(isinstance(badge, dict) and badge.get("set_id") == "moderator"
+                                                   for badge in badges):
+                role = "moderator"
+        return chat_events("twitch", user, str((data.get("message") or {}).get("text", "")),
+                           actor_id=actor_id, chat_role=role)
     if kind == "channel.follow":
         return [Event("twitch", "follow", user)]
     if kind == "channel.subscribe":

@@ -38,6 +38,7 @@ from .core.engine import Engine
 from .core.editing import update_rules
 from .core.events import Event, EventBus
 from .core.timers import Timer, TimerService, read_timers, without_timers
+from .now_playing import CONFIG_KEY as NOW_PLAYING_KEY, NowPlaying, NowPlayingSettings
 from .overlay_manager import find_overlay, validate_overlay_values
 from .overlay_server import CHAT_PLATFORMS, OverlayServer
 from .paths import user_overlays_dir
@@ -85,6 +86,7 @@ class Runtime:
         self._timer_task: asyncio.Task | None = None
         self._obs_metrics_task: asyncio.Task | None = None
         self.music = MusicQueue(self)
+        self.now_playing = NowPlaying(self, NowPlayingSettings.from_config(self.config.settings))
         self.voice_lock = asyncio.Lock()
         self.chat_tts = ChatTts(self, ChatTtsSettings.from_config(self.config.settings))
         self.overlays = OverlayServer(self)
@@ -144,6 +146,14 @@ class Runtime:
                             event.data.get("simulated") is True)
             with self._monitor_lock:
                 self._chat.append(line)
+
+    async def configure_now_playing(self, enabled: bool, source: str) -> None:
+        preference = NowPlayingSettings.select(enabled, source)
+        settings = {**self.config.settings, NOW_PLAYING_KEY: preference.to_dict()}
+        Config(settings=settings, triggers=self.config.triggers, actions=self.config.actions,
+               path=self.config.path).save()
+        self.config.settings = settings
+        await self.now_playing.apply(preference)
 
     async def configure_chat_tts(self, enabled: bool, platforms) -> ChatTtsSettings:
         preference = ChatTtsSettings.from_selection(enabled, platforms)
@@ -418,6 +428,7 @@ class Runtime:
             self.overlay_port_message = "Asigna un puerto para activar los overlays."
         if self.overlay_port_message:
             self.log(self.overlay_port_message)
+        await self.now_playing.apply(self.now_playing.settings)
         self._timer_task = asyncio.create_task(self.timers.run())
         self._obs_metrics_task = asyncio.create_task(self._sample_obs_health())
         if self.config.settings["obs"].get("autoconnect"):
@@ -429,6 +440,7 @@ class Runtime:
             await asyncio.sleep(8)
 
     async def _shutdown(self) -> None:
+        await self.now_playing.close()
         await self.chat_tts.close()
         if self._obs_metrics_task is not None:
             self._obs_metrics_task.cancel()

@@ -60,7 +60,9 @@ una canción (no una lista) en el bot. La música **no** sale por el bot,
 no participa en acciones, regalos o chat y no debe capturarse ni
 retransmitirse en OBS o LIVE Studio. Consulta las
 [condiciones de reproducción de Spotify](https://developer.spotify.com/documentation/web-api/reference/add-to-queue).
-No hay conexión con Apple Music o YouTube Music en esta versión.
+YouTube Music, Apple Music y Amazon Music no tienen vinculación de cuenta ni
+cola dentro del bot. Pueden aportar el título a **Ahora suena** si su reproductor
+expone metadatos en Linux.
 
 ## Voz natural en español de México
 
@@ -102,3 +104,27 @@ Deja `mi-voz.onnx.json` junto al `.onnx`. Si Piper no está configurado o
 falla al sintetizar, el bot intenta espeak-ng. Asegúrate de capturar la
 salida de tu equipo en el mezclador de OBS/LIVE Studio si quieres que el
 audio también se escuche en el directo.
+
+## Mostrar qué está sonando en OBS o LIVE Studio
+
+Abre **Música → Ahora suena**. Empieza desactivado. Elige **Buscar reproductores**
+si quieres mostrar un reproductor externo que esté abierto, o selecciona la
+**Cola de audio de Streamer Linux Bot (mpv)**. Marca **Mostrar el tema del
+reproductor elegido en mis overlays** y guarda. En **Overlays** copia el enlace
+de **Ahora suena · Vinilo nocturno** o **Ahora suena · Espectro neón** a tu fuente de navegador.
+
+En Linux, la búsqueda usa [MPRIS](https://specifications.freedesktop.org/mpris/latest/Player_Interface.html)
+en la misma sesión gráfica mediante [busctl](https://www.freedesktop.org/software/systemd/man/latest/busctl.html).
+Puede detectar Spotify de escritorio, un navegador con YouTube Music, Apple
+Music o Amazon Music, u otros reproductores si publican título y artista mediante
+MPRIS. Si no aparecen, inicia una pista y vuelve a buscar; el bot no accede a las
+cuentas ni puede forzar que un reproductor publique esos datos. Si el navegador
+cambia el nombre de su instancia al reiniciar, vuelve a seleccionarlo.
+
+La función no descarga ni envía audio al directo y no sustituye la autorización
+para transmitirlo. Solo muestra título, artista y estado; no publica carátulas,
+enlaces ni rutas. La cola del bot muestra el nombre de archivo sin extensión
+(o «Audio autorizado» para los enlaces). Si eliges un navegador, podría mostrar
+títulos de otros videos o pestañas privadas: mejor usa un reproductor dedicado.
+Desmarca la opción y guarda para retirar la información del overlay. Un bot
+ejecutado en otro servidor no lee tu sesión gráfica de Linux.

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:* wss://127.0.0.1:* wss://localhost:*; base-uri 'none'; form-action 'none'">
+  <title>Ahora suena · Vinilo nocturno</title>
+  <link rel="stylesheet" href="/sdk/now-playing.css">
+  <script defer src="/sdk/now-playing.js"></script>
+</head>
+<body data-variant="vinyl" data-position="bottom-left" data-motion="true">
+  <main id="track" class="track" aria-label="Ahora suena" aria-live="polite" data-state="idle" hidden>
+    <div class="record" aria-hidden="true"><span></span></div>
+    <div class="details">
+      <div class="eyebrow"><span class="led" aria-hidden="true"></span><span id="status">AHORA SUENA</span><span id="demo" class="demo" hidden>PRUEBA</span></div>
+      <h1 id="title" dir="auto"></h1>
+      <p id="artist" dir="auto" hidden></p>
+    </div>
+  </main>
+</body>
+</html>
