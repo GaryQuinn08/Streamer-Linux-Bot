@@ -8,7 +8,8 @@
   const shapeKeys = new Set(["wide", "square", "tall"]);
   const hex = /^#[0-9a-f]{6}$/i;
   const ranges = { duration: [0, 300], size: [12, 72], max: [1, 24], opacity: [0, 100],
-    enterMs: [0, 3000], exitMs: [0, 3000] };
+    enterMs: [0, 3000], exitMs: [0, 3000], positionX: [0, 100], positionY: [0, 100], width: [24, 100],
+    radius: [0, 48], padding: [0, 48], border: [0, 16] };
   const effects = new Set(window.SLB_EDITOR?.EFFECTS || ["none"]);
   const labelLimits = { name: 60, title: 220, body: 380 };
   const validId = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -66,6 +67,8 @@
     for (const key of ["enter", "exit"]) {
       if (effects.has(raw[key])) preset[key] = raw[key];
     }
+    if (["left", "center", "right"].includes(raw.align)) preset.align = raw.align;
+    if (typeof raw.showPlatform === "boolean") preset.showPlatform = raw.showPlatform;
     const description = safeText(entry.description, 240);
     const author = safeText(entry.author, 80) || "Comunidad";
     const creatorId = typeof entry.creatorId === "string" && validId.test(entry.creatorId) ? entry.creatorId : "";

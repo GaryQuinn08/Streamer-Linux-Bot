@@ -62,8 +62,8 @@ label, legend { font-size: 12px; color: #d2dfea; font-weight: 650; }
 label { display: block; }
 .settings label:not(.palette label, .numbers label), .variables label { margin-bottom: 5px; }
 .settings .panel-body > label:not(:first-child) { margin-top: 10px; }
-input:not([type="color"]), textarea, select { width: 100%; background: var(--panel-deep); color: var(--ink); border: 1px solid #355064; border-radius: 6px; padding: 7px 8px; font-size: 13px; }
-input:not([type="color"]):focus, textarea:focus, select:focus { border-color: #8dd8b8; }
+input:not([type="color"],[type="checkbox"]), textarea, select { width: 100%; background: var(--panel-deep); color: var(--ink); border: 1px solid #355064; border-radius: 6px; padding: 7px 8px; font-size: 13px; }
+input:not([type="color"],[type="checkbox"]):focus, textarea:focus, select:focus { border-color: #8dd8b8; }
 textarea { resize: vertical; line-height: 1.45; }
 .help { margin: 5px 0 0; font-size: 11.5px; color: var(--muted); line-height: 1.46; }
 .help[data-error="true"], #status[data-error="true"] { color: var(--danger); }
@@ -73,7 +73,10 @@ legend { padding: 0; margin-bottom: 7px; }
 .palette label { color: var(--muted); gap: 3px; display: grid; font-weight: 500; font-size: 11px; }
 input[type="color"] { width: 100%; height: 25px; padding: 2px; border: 1px solid #3b5368; border-radius: 5px; background: var(--panel-deep); cursor: pointer; }
 .numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
-.numbers input { margin-top: 4px; }
+.numbers :is(input,select) { margin-top: 4px; }
+.check-option { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.check-option input { accent-color: #7ad8b1; flex: 0 0 auto; margin-inline: 0; }
+.numbers .check-option { align-self: end; min-height: 33px; }
 .motion {
   display: grid;
   grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
@@ -88,6 +91,7 @@ input[type="color"] { width: 100%; height: 25px; padding: 2px; border: 1px solid
 .badge { color: #c2e9d9; font-size: 11px; background: #183b34; border: 1px solid #345a50; padding: 4px 6px; border-radius: 5px; white-space: nowrap; }
 .badge i { display: inline-block; height: 5px; width: 5px; margin-right: 4px; border-radius: 50%; background: #96e5cc; vertical-align: 2px; }
 .screen {
+  position: relative;
   margin-inline: 14px;
   border: 1px solid #3d5465;
   border-radius: 9px;
@@ -98,7 +102,29 @@ input[type="color"] { width: 100%; height: 25px; padding: 2px; border: 1px solid
   background-position: 0 0, 0 10px, 10px -10px, -10px 0;
 }
 iframe { display: block; color-scheme: light; background: transparent; width: 100%; height: clamp(225px, 27vw, 328px); border: 0; }
+.layout-handle {
+  display: grid; place-items: center; position: absolute; z-index: 1; inline-size: 32px; block-size: 32px;
+  left: clamp(17px, var(--guide-x, 50%), calc(100% - 17px));
+  top: clamp(17px, var(--guide-y, 50%), calc(100% - 17px)); transform: translate(-50%, -50%);
+  background: #0c2c23c7; border: 1px dashed #acebce; color: #dbffee; border-radius: 6px;
+  cursor: grab; touch-action: none; padding: 3px;
+}
+.layout-handle:hover, .layout-handle:focus-visible { background: #276348; }
+.layout-handle.dragging { cursor: grabbing; }
+.layout-handle svg { width: 22px; height: 22px; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+.layout-bar, .lab-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; }
+.layout-bar { margin: 7px 14px 0; }
+.layout-bar .help { margin: 0; }
+.coordinates { margin-inline-start: auto; font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums; }
 .status-preview { margin: 7px 14px 10px; min-height: 17px; }
+.advanced-header { border-top: 1px solid var(--soft-line); padding: 9px 14px; }
+.lab-lead { margin: 0 0 7px; }
+.lab-actions { margin-top: 6px; }
+.lab-output {
+  margin: 6px 0; padding: 8px; border: 1px solid var(--soft-line); border-radius: 5px; background: #101b24;
+  color: #d3eadf; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; min-height: 40px;
+}
+.js-sandbox { display: none; }
 .code-area { border-top: 1px solid var(--soft-line); }
 .code-header { display: flex; gap: 6px; padding: 9px 14px 0; align-items: center; }
 .code-header button[aria-selected="true"] { color: #a5efd0; background: #203b35; border-color: #4b8877; }

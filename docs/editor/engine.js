@@ -11,7 +11,6 @@
   ].join("\n");
   const CSS = [
     '/* Cambia aquí los estilos de la tarjeta. */',
-    '.card { border-radius: .72em; }',
     '.title { letter-spacing: -.02em; }',
     '.body { line-height: 1.35; }'
   ].join("\n");
@@ -24,8 +23,14 @@
       textColor: "#fff7ff", background: "#261a34", duration: 0, size: 22, max: 5, opacity: 90, markup: MARKUP, css: CSS })
   });
   const RANGES = Object.freeze({ duration: [0, 300], size: [12, 72], max: [1, 24], opacity: [0, 100],
-    enterMs: [0, 3000], exitMs: [0, 3000] });
+    enterMs: [0, 3000], exitMs: [0, 3000], positionX: [0, 100], positionY: [0, 100],
+    width: [24, 100], radius: [0, 48], padding: [0, 48], border: [0, 16] });
   const MOTION_DEFAULTS = Object.freeze({ enter: "none", exit: "none", enterMs: 320, exitMs: 240 });
+  const LAYOUT_DEFAULTS = Object.freeze({
+    alert: { positionX: 50, positionY: 50, width: 75, radius: 16, padding: 17, border: 4, align: "left", showPlatform: true },
+    chat: { positionX: 50, positionY: 100, width: 100, radius: 12, padding: 11, border: 4, align: "left", showPlatform: true },
+    events: { positionX: 50, positionY: 100, width: 100, radius: 12, padding: 11, border: 4, align: "left", showPlatform: true }
+  });
   const MOTIONS = Object.freeze({
     fade: [["none", "none"], ["none", "none"]],
     "slide-up": [["translateY(24px)", "none"], ["none", "translateY(-24px)"]],
@@ -46,12 +51,11 @@
     *{box-sizing:border-box}
     :root{font-family:"Noto Sans","Segoe UI",Arial,sans-serif}
     html,body{margin:0;overflow:hidden;background:transparent;width:100%;height:100%;color:var(--ink)}
-    #slb-stage{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;gap:.35em;padding:.66em}
-    body[data-mode="alert"] #slb-stage{align-items:center;justify-content:center}
-    .slb-row{display:block;flex:0 0 auto;max-width:100%;min-width:0;overflow-wrap:anywhere}
-    .card{position:relative;min-width:0;padding:.52em .83em;background:var(--card);border-left:.15em solid var(--accent);box-shadow:0 .16em .8em #0003;overflow:hidden}
-    body[data-mode="alert"] .card{max-width:min(94vw,38em);min-width:min(68vw,13em);padding:.72em 1.15em;box-shadow:0 .3em 1.35em #0006}
-    .eyebrow{color:var(--accent);font-weight:740;font-size:.55em;letter-spacing:.14em;text-transform:uppercase;margin:0 0 .36em}
+    #slb-stage{position:absolute;left:var(--slb-x);top:var(--slb-y);width:var(--slb-width);transform:translateY(var(--slb-shift-y));display:flex;flex-direction:column;gap:.35em;padding:.45em}
+    .slb-row{display:block;flex:0 0 auto;max-width:100%;min-width:0;overflow-wrap:anywhere;text-align:var(--slb-align)}
+    .card{position:relative;min-width:0;padding:var(--slb-padding);border-radius:var(--slb-radius);background:var(--card);border-left:var(--slb-border) solid var(--accent);box-shadow:0 .16em .8em #0003;overflow:hidden}
+    body[data-mode="alert"] .card{box-shadow:0 .3em 1.35em #0006}
+    .eyebrow{display:var(--slb-platform);color:var(--accent);font-weight:740;font-size:.55em;letter-spacing:.14em;text-transform:uppercase;margin:0 0 .36em}
     .eyebrow:empty{display:none}
     .title{display:block;margin:0 0 .16em;color:var(--ink);font-weight:750;line-height:1.15;font-size:1em}
     .title:empty{display:none}
@@ -66,7 +70,7 @@
 
   function normalize(values = {}, presetOnly = false) {
     const mode = typeof values.mode === "string" && own(DEFAULTS, values.mode) ? values.mode : "alert";
-    const clean = { ...MOTION_DEFAULTS, ...DEFAULTS[mode], mode };
+    const clean = { ...MOTION_DEFAULTS, ...LAYOUT_DEFAULTS[mode], ...DEFAULTS[mode], mode };
     for (const [name, max] of Object.entries(LIMITS)) {
       if (presetOnly && (name === "css" || name === "markup")) continue;
       if (typeof values[name] === "string") clean[name] = values[name].slice(0, max);
@@ -77,6 +81,8 @@
     for (const stage of ["enter", "exit"]) {
       if (EFFECTS.includes(values[stage])) clean[stage] = values[stage];
     }
+    if (["left", "center", "right"].includes(values.align)) clean.align = values.align;
+    if (typeof values.showPlatform === "boolean") clean.showPlatform = values.showPlatform;
     for (const [key, [low, high]] of Object.entries(RANGES)) {
       const n = values[key];
       if (typeof n === "number" && Number.isFinite(n)) clean[key] = Math.min(high, Math.max(low, Math.round(n)));
@@ -233,7 +239,12 @@
   function properties(config, style, replay) {
     const digits = config.background.slice(1).match(/.{2}/g);
     const rgb = digits.map((part) => parseInt(part, 16)).join(", ");
-    return `:root{--accent:${config.accent};--ink:${config.textColor};--card:rgba(${rgb},${config.opacity / 100});font-size:${config.size}px}\n${ONSCREEN_CSS}\n${style}\n${animationCss(config, replay)}`;
+    const x = (100 - config.width) * config.positionX / 100;
+    const y = config.positionY;
+    const layout = `--slb-x:${x}%;--slb-y:${y}%;--slb-shift-y:${-y}%;--slb-width:${config.width}%;`
+      + `--slb-align:${config.align};--slb-padding:${config.padding}px;--slb-radius:${config.radius}px;`
+      + `--slb-border:${config.border}px;--slb-platform:${config.showPlatform ? "block" : "none"};`;
+    return `:root{${layout}--accent:${config.accent};--ink:${config.textColor};--card:rgba(${rgb},${config.opacity / 100});font-size:${config.size}px}\n${ONSCREEN_CSS}\n${style}\n${animationCss(config, replay)}`;
   }
 
   // Se evalúa aquí para la previsualización y se copia al HTML descargado.

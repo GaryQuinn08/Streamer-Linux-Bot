@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-IOSmv+u6wzxtEybBynNOClSFU711Nr3/GBmcqBvRIYM='; worker-src blob:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Laboratorio JS aislado</title>
+<script>(() => {
+  "use strict";
+  if (window.origin !== "null" || parent === window) return;
+  let started = false;
+  window.addEventListener("message", (incoming) => {
+    if (started || incoming.source !== parent) return;
+    const data = incoming.data;
+    if (!data || data.kind !== "slb-js-run" || typeof data.id !== "string" || !/^[0-9a-f-]{1,30}$/.test(data.id)
+        || typeof data.source !== "string" || data.source.length > 8000) return;
+    started = true;
+    let worker;
+    let object;
+    let timer;
+    let done = false;
+    const lines = [];
+    function send(kind, text) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      worker?.terminate();
+      if (object) URL.revokeObjectURL(object);
+      parent.postMessage({ kind, id: data.id, text }, "*");
+    }
+    try {
+      const demo = {};
+      for (const key of ["plataforma", "usuario", "tipo", "texto", "regalo"]) {
+        demo[key] = typeof data.demo?.[key] === "string" ? data.demo[key].slice(0, 200) : "";
+      }
+      demo.cantidad = Number.isFinite(data.demo?.cantidad) ? data.demo.cantidad : 0;
+      // El origen opaco y la CSP heredada restringen las peticiones del Worker.
+      // Elimina también las entradas de red y subworkers comunes de su API.
+      const bootstrap = '"use strict";\n' +
+        'const enviar = self.postMessage.bind(self);\n' +
+        'for (const key of ["fetch","XMLHttpRequest","WebSocket","EventSource","WebTransport","importScripts",' +
+        '"Worker","SharedWorker","BroadcastChannel","RTCPeerConnection","indexedDB","caches","postMessage"]) {\n' +
+        '  for (let target=self; target && target!==Object.prototype; target=Object.getPrototypeOf(target)) {\n' +
+        '    if (!Object.hasOwn(target,key)) continue;\n' +
+        '    try {Object.defineProperty(target,key,{value:undefined,writable:false,configurable:false});} catch {}\n' +
+        '  }\n' +
+        '}\n' +
+        'const evento = Object.freeze(' + JSON.stringify(demo) + ');\n' +
+        'let allowed=8;\n' +
+        'const mostrar=(value)=>{ if (!allowed--) {allowed=0;return;} let text; ' +
+        'try{text=typeof value==="string"?value:JSON.stringify(value);}catch{text="No se puede convertir este valor a texto.";} ' +
+        'enviar({kind:"line",text:String(text).slice(0,280)}); };\n' +
+        'void (async (enviar) => {\n' + data.source + '\n})(undefined)\n' +
+        '.then(()=>enviar({kind:"done"}),error=>enviar({kind:"error",text:String(error).slice(0,180)}));';
+      object = URL.createObjectURL(new Blob([bootstrap], { type: "text/javascript" }));
+      worker = new Worker(object, { name: "slb-demo" });
+      timer = setTimeout(() => send("slb-js-error", "La prueba se detuvo al alcanzar el límite de 800 ms."), 800);
+      worker.onmessage = ({ data: output }) => {
+        if (!output || typeof output !== "object") return;
+        if (output.kind === "line" && typeof output.text === "string" && lines.length < 8) {
+          lines.push(output.text.slice(0, 280));
+        } else if (output.kind === "done") {
+          send("slb-js-ok", lines.join("\n"));
+        } else if (output.kind === "error") {
+          send("slb-js-error", "Error de JavaScript: " + (typeof output.text === "string" ? output.text.slice(0, 180) : ""));
+        }
+      };
+      worker.onerror = (error) => {
+        error.preventDefault();
+        send("slb-js-error", "No se inició la prueba. Revisa la sintaxis de JavaScript.");
+      };
+    } catch {
+      send("slb-js-error", "El navegador no pudo iniciar el entorno de prueba aislado.");
+    }
+  });
+})();
+</script>
+</html>

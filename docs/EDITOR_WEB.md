@@ -18,10 +18,14 @@ servidor de prueba a Internet.
 
 ## Importar el diseño en el bot
 
-1. Elige **Alerta**, **Multichat** o **Actividad**, ajusta controles o
-   edita el HTML y CSS del diseño y usa la muestra para comprobarlo.
+1. Elige **Alerta**, **Chat multiplataforma** o **Últimos eventos**.
+   Arrastra la guía en la vista previa o usa sus flechas (Mayús mueve más).
+   Para una posición exacta, escribe los porcentajes horizontal y vertical
+   en **Posición en el lienzo**. Desde los controles también puedes ajustar
+   el ancho, la alineación, las esquinas, el margen interno, el grosor del
+   acento y la etiqueta de plataforma.
 2. Descarga el HTML. Conserva el archivo si quieres una copia local.
-   Elige la entrada, la salida y su duración en **Movimiento**; usa la
+   Elige la entrada, la salida y su duración en **Animación**; usa la
    vista previa para ensayar ambos efectos. Las animaciones se incluyen
    en el HTML y respetan la preferencia de movimiento reducido.
 3. Abre **Overlays → Importar HTML…** en Streamer Linux Bot y selecciona
@@ -44,6 +48,18 @@ Después recarga la fuente de OBS para ver el HTML nuevo.
 También puedes copiar un enlace de ajustes visuales. Ese enlace no incluye
 el HTML/CSS personalizado; comparte el archivo HTML solo si quieres
 entregar una copia completa del diseño.
+
+## Edición avanzada
+
+Activa **Habilitar edición avanzada (HTML, CSS y JS)** debajo de la vista
+previa. El HTML y el CSS compatibles cambian el diseño y se conservan
+al exportarlo. El laboratorio de JavaScript requiere pulsar su botón de
+ejecución: usa un evento ficticio y muestra el resultado por separado,
+sin acceso al lienzo ni a los eventos reales. Por ejemplo,
+`mostrar("Hola, " + evento.usuario)` muestra el nombre de la persona
+ficticia. Puedes descargar tu fuente `.js` por separado, pero no se
+adjunta al HTML de OBS ni se publica en Comunidad. Las animaciones de
+los controles y del CSS compatible sí se exportan.
 
 ## Qué significan las etiquetas
 
@@ -84,6 +100,6 @@ Para añadir diseños y comparar otras arquitecturas, consulta [Galería](GALERI
   HTML → Overlays → Importar HTML…** y selecciona el overlay en la
   subacción de tu evento. No importa escenas, archivos `.overlay`,
   JavaScript, sonidos ni las reglas de Streamlabs.
-- **Tienes HTML/CSS propios:** puedes copiar el marcado y estilos
+- **Tienes HTML/CSS propios:** activa la edición avanzada y copia el marcado y estilos
   compatibles a sus pestañas y sustituir las etiquetas de eventos.
   No pegues código privado o diseños que no tienes permiso de reutilizar.
