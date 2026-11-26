@@ -6,7 +6,7 @@ Aplicación de escritorio para Linux que automatiza tu stream: recibe eventos
 (chat, seguidores, regalos, donaciones...), los pasa por **triggers** y ejecuta
 **acciones** (alertas en pantalla, cambios de escena en OBS, sonidos, TTS...).
 
-## Beta 7 para Linux
+## Beta 8 para Linux
 
 Instalación desde el repositorio sin ZIP ni dependencias de Qt de APT.
 Conserva el perfil de la beta anterior, incluido el catálogo y las alertas
@@ -23,7 +23,9 @@ si al conectar activaste el permiso de envío. También puedes añadir
 o como fuente Enlace de LIVE Studio, donde esté disponible. Al guardar
 la apariencia, la fuente abierta se actualiza sin cambiar su enlace.
 Los mensajes reales duran 15 segundos por defecto; usa 0 si quieres
-que permanezcan hasta que los desplacen mensajes nuevos.
+que permanezcan hasta que los desplacen mensajes nuevos. En OBS, al pegar
+la URL en la fuente Navegador, marca **Actualizar el navegador cuando
+la escena se active** para que el chat se recargue al volver a la escena.
 
 ### Linux Mint, Ubuntu o Debian
 

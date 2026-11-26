@@ -132,7 +132,9 @@ class SessionPanel(QWidget):
             rows = [(_clock(line.at), line.platform + (" · prueba" if line.simulated else ""),
                      line.user, line.text) for line in reversed(items)]
             text = ("Los mensajes llegan de las plataformas conectadas; "
-                    "las pruebas se identifican en la lista. El chat no se guarda al cerrar.")
+                    "las pruebas se identifican en la lista. El chat no se guarda al cerrar. "
+                    "Para mostrarlo en OBS, copia la URL en Overlays → Chat multiplataforma y marca "
+                    "«Actualizar el navegador cuando la escena se active» en la fuente Navegador.")
         else:
             rows = [(_clock(run.at), run.action, run.origin, f"{run.platform}/{run.event}",
                      run.state + (f" ({run.failures})" if run.failures else ""),

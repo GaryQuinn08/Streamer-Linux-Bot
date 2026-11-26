@@ -487,9 +487,8 @@ class OverlaysTab(QWidget):
         edits.addStretch(1)
         self.status = QLabel()
         self.status.setWordWrap(True)
-        hint = QLabel("Abre la URL en el navegador o como fuente de OBS antes de probar. "
-                      "Después de guardar la apariencia, actualiza la fuente para verla.")
-        hint.setWordWrap(True)
+        self.overlay_hint = QLabel()
+        self.overlay_hint.setWordWrap(True)
 
         right.addWidget(self.title)
         right.addWidget(self.desc)
@@ -499,8 +498,8 @@ class OverlaysTab(QWidget):
         right.addWidget(self.status)
         right.addWidget(QLabel("URL del overlay:"))
         right.addWidget(self.url)
+        right.addWidget(self.overlay_hint)
         right.addLayout(buttons)
-        right.addWidget(hint)
         right.addStretch(1)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -548,6 +547,18 @@ class OverlaysTab(QWidget):
         self._info = info
         self.title.setText(info.name)
         self.desc.setText(info.description)
+        if info.id == "multi-chat":
+            self.overlay_hint.setText(
+                "OBS: al pegar esta URL en las propiedades de la fuente Navegador, marca "
+                "«Actualizar el navegador cuando la escena se active». "
+                "Al recargarse, la fuente empieza sin los mensajes anteriores. "
+                "Abre la fuente antes de pulsar «Probar alerta»."
+            )
+        else:
+            self.overlay_hint.setText(
+                "Abre la URL en el navegador o como fuente de OBS antes de probar. "
+                "Después de guardar la apariencia, actualiza la fuente para verla."
+            )
         preview = info.preview_path
         pixmap = QPixmap(str(preview)) if preview else QPixmap()
         if not pixmap.isNull():

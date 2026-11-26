@@ -2,7 +2,7 @@
 # Build a pure-Python Debian 13 package; dependencies are resolved by APT.
 set -eu
 src=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
-version=0.2.0~beta7
+version=0.2.0~beta8
 target=${1:-"$src/dist"}
 mkdir -p "$target"
 stage=$(mktemp -d)

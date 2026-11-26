@@ -159,3 +159,20 @@ class WorkspaceTests(unittest.TestCase):
             self.assertEqual(panel.twitch_message.text(), "")
             self.assertEqual(send.await_count, 2)
             send.assert_awaited_with("Borrador")
+
+    def test_multichat_shows_obs_scene_refresh_hint(self):
+        from slbot.ui.main_window import LogBridge, MainWindow
+
+        window = MainWindow(self.rt, LogBridge())
+        self.addCleanup(window.close)
+        label = "Actualizar el navegador cuando la escena se active"
+        window.show()
+        window.select_page("chat")
+        self.assertIn(label, window.chat_page.notice.text())
+        window.select_page("overlays")
+        view = window.overlays_page
+        view.refresh(select_id="multi-chat")
+        self.assertIn(label, view.overlay_hint.text())
+        self.assertIn("/overlay/multi-chat/", view.url.text())
+        view.refresh(select_id="gift-alert")
+        self.assertNotIn(label, view.overlay_hint.text())
