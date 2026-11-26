@@ -1,3 +1,3 @@
 """Streamer Linux Bot: automatización de streams para Linux."""
 
-__version__ = "0.2.0b14"
+__version__ = "0.2.0b15"

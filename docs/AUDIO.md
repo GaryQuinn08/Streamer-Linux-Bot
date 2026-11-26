@@ -18,6 +18,28 @@ sudo apt install mpv espeak-ng
   `{text}`, contenido del público. Pon filtros y tiempo de espera
   para evitar abuso. La voz predeterminada usa espeak-ng en español.
 
+## Leer el chat de varias plataformas con una voz
+
+Desde la **beta 15**, abre **Chat → Leer chat en voz alta (TTS)**. La lectura
+automática viene apagada. Marca **Leer automáticamente los mensajes nuevos**,
+elige cualquiera de Twitch, TikTok, YouTube o Kick y pulsa **Guardar lectura**.
+Los mensajes de las plataformas desmarcadas siguen apareciendo en tu chat.
+Las cuatro usan la misma voz local: espeak-ng en español, o Piper si ya lo
+configuraste. No se suben los mensajes a un servicio de voz.
+
+**Probar voz** reproduce una frase de prueba sin conectar cuentas ni activar la
+lectura automática. **Detener y vaciar cola** interrumpe la voz del lector y
+descarta lo pendiente, pero no impide que se lean los mensajes nuevos. Para
+dejar de leer, desmarca la lectura automática y guarda. La opción **Simular
+mensaje** sirve para la vista del chat, no dispara la voz automática.
+
+Para emitir la voz, comprueba qué entrada de audio está capturando OBS o LIVE
+Studio. Desmarcar una plataforma en el overlay visual no silencia su lectura.
+Si compartes la misma mezcla de audio con Twitch durante un multistream,
+selecciona solo Twitch para la voz que sale por esa mezcla o deja la voz fuera
+de la salida pública.
+[Directrices de Twitch](https://help.twitch.tv/s/article/simulcasting-guidelines?language=es_MX).
+
 ## Spotify (opcional, solo escucha privada)
 
 **Música → Spotify** agrega canciones por enlace a la cola del reproductor

@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Callable, Coroutine
 
 from .audio import MusicQueue
+from .chat_tts import CONFIG_KEY as CHAT_TTS_KEY, ChatTts, ChatTtsSettings
 from .connectors.base import Connector
 from .connectors.obs import ObsConnector
 from .connectors.kick import KickConnector
@@ -96,6 +97,8 @@ class Runtime:
         self.timers = TimerService(self)
         self._timer_task: asyncio.Task | None = None
         self.music = MusicQueue(self)
+        self.voice_lock = asyncio.Lock()
+        self.chat_tts = ChatTts(self, ChatTtsSettings.from_config(self.config.settings))
         self.overlays = OverlayServer(self)
         self.overlay_port_message = ""
         self._overlay_lock = asyncio.Lock()
@@ -154,6 +157,28 @@ class Runtime:
                             event.data.get("simulated") is True)
             with self._monitor_lock:
                 self._chat.append(line)
+
+    async def configure_chat_tts(self, enabled: bool, platforms) -> ChatTtsSettings:
+        preference = ChatTtsSettings.from_selection(enabled, platforms)
+        settings = {**self.config.settings, CHAT_TTS_KEY: preference.to_dict()}
+        Config(settings=settings, triggers=self.config.triggers, actions=self.config.actions,
+               path=self.config.path).save()
+        self.config.settings = settings
+        await self.chat_tts.apply(preference)
+        return preference
+
+    async def reload_chat_tts(self, settings) -> None:
+        preference = ChatTtsSettings.from_config(settings)
+        self.config.settings[CHAT_TTS_KEY] = preference.to_dict()
+        await self.chat_tts.apply(preference)
+
+    async def preview_chat_tts(self) -> None:
+        if self.editor_only:
+            raise ValueError("El editor de perfil no reproduce la voz.")
+        await self.chat_tts.preview()
+
+    async def clear_chat_tts(self) -> None:
+        await self.chat_tts.clear()
 
     async def execute_action(self, action: Action, event: Event, origin: str) -> None:
         if self.editor_only:
@@ -393,6 +418,7 @@ class Runtime:
             self.overlay_port_message = "Editor de perfil: no abre puertos ni transmite."
             return
         self.bus.subscribe(self._track_chat)
+        self.bus.subscribe(self.chat_tts.on_event)
         self.bus.subscribe(self.engine.on_event)
         self.bus.subscribe(self._forward_overlay_event)
         port = self._port_override if self._port_override is not None else self.config.settings.get("overlay_port")
@@ -414,6 +440,7 @@ class Runtime:
             self.spawn(self.obs.start())
 
     async def _shutdown(self) -> None:
+        await self.chat_tts.close()
         if self._timer_task is not None:
             self._timer_task.cancel()
             await asyncio.gather(self._timer_task, return_exceptions=True)

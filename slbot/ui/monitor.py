@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QLineEdit, QPushBu
 
 from ..connectors.oauth import SignInError
 from ..connectors.simulator import sample_event
+from .chat_speech import ChatSpeechPanel
 from .rule_editor import ActionWorkspace
 
 
@@ -46,6 +47,8 @@ class SessionPanel(QWidget):
         self.notice.setWordWrap(True)
         layout.addWidget(self.notice)
         if chat:
+            self.speech = ChatSpeechPanel(runtime)
+            layout.addWidget(self.speech)
             self._sending = False
             self.send_finished.connect(self._twitch_done, Qt.ConnectionType.QueuedConnection)
             composer = QHBoxLayout()

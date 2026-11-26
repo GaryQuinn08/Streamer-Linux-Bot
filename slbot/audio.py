@@ -136,18 +136,29 @@ async def _download_audio(item: HostedAudio, folder: Path) -> tuple[Path, str]:
 
 
 async def run_process(*argv: str, text: str | None = None, timeout: float = 7200) -> int:
-    process = await asyncio.create_subprocess_exec(
+    process = None
+    spawn = asyncio.create_task(asyncio.create_subprocess_exec(
         *argv, stdin=(asyncio.subprocess.PIPE if text is not None else asyncio.subprocess.DEVNULL),
         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-    )
+    ))
     try:
+        try:
+            process = await asyncio.shield(spawn)
+        except asyncio.CancelledError:
+            # Creation may already have started the child before it returns its transport.
+            # Recover the process handle so stopping voice still terminates it.
+            try:
+                process = await spawn
+            except Exception:
+                pass
+            raise
         if text is not None:
             await asyncio.wait_for(process.communicate(text.encode("utf-8")), timeout)
         else:
             await asyncio.wait_for(process.wait(), timeout)
         return process.returncode
     finally:
-        if process.returncode is None:
+        if process is not None and process.returncode is None:
             try:
                 process.terminate()
             except ProcessLookupError:
@@ -273,6 +284,17 @@ async def play_sound(path: Path) -> None:
 
 
 async def say(rt, value: str) -> None:
+    # Automatic chat shares the same synthesizer with manually configured TTS steps.
+    # Keep the registration API and the same local voice for both paths.
+    lock = getattr(rt, "voice_lock", None)
+    if lock is None:
+        await _say(rt, value)
+    else:
+        async with lock:
+            await _say(rt, value)
+
+
+async def _say(rt, value: str) -> None:
     text = value.strip()[:300]
     if not text:
         return
