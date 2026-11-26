@@ -9,6 +9,11 @@
   const validKey = /^(?:gallery:[a-z0-9][a-z0-9-]{0,63}|community:[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})$/;
   const number = new Intl.NumberFormat("es-MX");
   const decimal = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const licenses = new Map([
+    ["CC0-1.0", ["Reutilización sin exigir crédito", "https://creativecommons.org/publicdomain/zero/1.0/deed.es"]],
+    ["CC-BY-4.0", ["Reutilización con crédito al creador", "https://creativecommons.org/licenses/by/4.0/deed.es"]],
+    ["CC-BY-SA-4.0", ["Crédito al creador y misma licencia al compartir adaptaciones", "https://creativecommons.org/licenses/by-sa/4.0/deed.es"]]
+  ]);
   const views = new Map(), stats = new Map(), requests = new Map();
   let clientPromise, authPromise, nextId = 0;
   let authState = configured ? "loading" : "offline";
@@ -128,6 +133,16 @@
     return node;
   }
 
+  function licenseLink(parent, value) {
+    const license = licenses.get(value);
+    if (!license) return el(parent, "span", "Sin licencia indicada");
+    const link = el(parent, "a", license[0]);
+    link.href = license[1];
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    return link;
+  }
+
   function controls(parent, { key, name, signIn }) {
     if (typeof key !== "string" || !validKey.test(key)) return () => {};
     const box = el(parent, "div", "", "catalog-social");
@@ -135,7 +150,7 @@
     const detail = el(box, "details", "", "catalog-rating");
     el(detail, "summary", "Calificar");
     const guide = el(detail, "p", "Consultando tu sesión…", "catalog-guide");
-    const login = el(guide, "a", "Inicia sesión con Google en Comunidad");
+    const login = el(guide, "a", "Inicia sesión con Google");
     login.href = signIn;
     login.hidden = true;
     const group = el(detail, "fieldset", "", "catalog-stars");
@@ -203,7 +218,7 @@
       group.hidden = authState !== "google";
       guide.hidden = authState === "google";
       guide.replaceChildren();
-      if (authState === "guest") { login.hidden = false; guide.append(login, " para votar."); }
+      if (authState === "guest") { login.hidden = false; guide.append(login, " para votar, publicar tus diseños y ver tus aportes. Puedes descargar sin cuenta."); }
       else if (authState === "loading") guide.textContent = "Consultando tu sesión…";
       else if (authState === "offline") guide.textContent = "Los votos no están disponibles ahora.";
     }
@@ -218,5 +233,5 @@
     };
   }
 
-  window.SLB_SOCIAL = Object.freeze({ configured, client, googleSession, refresh, controls, downloadStarted });
+  window.SLB_SOCIAL = Object.freeze({ configured, client, googleSession, refresh, controls, downloadStarted, licenseLink });
 })();

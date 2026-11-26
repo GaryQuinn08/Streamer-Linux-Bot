@@ -49,7 +49,8 @@
     catch { return; } // no servir material histórico que el editor ya no acepte
     const card = element(get("published"), "article");
     element(card, "h3", design.name);
-    element(card, "p", "Diseño de " + String(item.creator_name).slice(0,60) + " · " + String(item.license).slice(0,20));
+    const credit = element(card, "p", "Diseño de " + String(item.creator_name).slice(0,60) + " · ");
+    social.licenseLink(credit, item.license);
     element(card, "p", String(item.description).slice(0,280));
     const frame = document.createElement("iframe");
     frame.title = "Muestra de " + design.name;

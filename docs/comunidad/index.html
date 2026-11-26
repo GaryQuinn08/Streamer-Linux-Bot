@@ -11,8 +11,8 @@
 <link rel="stylesheet" href="community.css?v=catalog-social-1">
 <script src="../editor/engine.js?v=editor-visual-1" defer></script>
 <script src="config.js?v=supabase-1" defer></script>
-<script src="../catalog-social.js?v=catalog-social-1" defer></script>
-<script src="community.js?v=catalog-social-1" defer></script>
+<script src="../catalog-social.js?v=catalog-social-2" defer></script>
+<script src="community.js?v=catalog-social-2" defer></script>
 </head>
 <body>
 <header class="site-nav"><div class="shell header-inner"><a class="brand" href="../galeria/">Streamer Linux Bot</a><nav aria-label="Estudio"><a href="../galeria/">Galería</a><a href="../editor/">Editor</a><a href="./" aria-current="page">Comunidad</a></nav></div></header>
@@ -26,7 +26,13 @@
     <form id="submission" hidden>
       <label>Crédito público del creador <input id="creator" required minlength="2" maxlength="60" autocomplete="off"></label>
       <label>Descripción <textarea id="description" required minlength="10" maxlength="280" rows="3"></textarea></label>
-      <label>Licencia <select id="license"><option value="CC0-1.0">CC0 1.0</option><option value="CC-BY-4.0">CC BY 4.0</option><option value="CC-BY-SA-4.0">CC BY-SA 4.0</option></select></label>
+      <label>Licencia <select id="license" required aria-describedby="license-help">
+        <option value="" disabled selected>Elige cómo pueden reutilizar tu diseño</option>
+        <option value="CC0-1.0">Reutilización sin exigir crédito</option>
+        <option value="CC-BY-4.0">Reutilización con crédito al creador</option>
+        <option value="CC-BY-SA-4.0">Crédito al creador y misma licencia al compartir adaptaciones</option>
+      </select></label>
+      <p id="license-help">Las tres opciones permiten usar, modificar y compartir el diseño, incluso para fines comerciales. Elige qué condiciones quieres aplicar.</p>
       <label>HTML exportado por este editor <input id="file" type="file" accept=".html,.htm,text/html" required></label>
       <p>Al publicar se muestran de inmediato los ajustes visuales y las animaciones. Tu HTML y CSS personalizados se quedan en el archivo original. El JavaScript se descarga por separado y nunca se publica.</p>
       <p>Al publicar, confirmas que tienes derecho a compartir este diseño con el crédito y la licencia elegidos.</p>

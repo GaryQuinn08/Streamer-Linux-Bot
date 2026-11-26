@@ -250,7 +250,9 @@
       profile.href = "./?creador=" + encodeURIComponent(model.creatorId);
     } else add(credit, "span", model.author);
     if (model.official) add(credit, "span", " · Colección oficial");
-    add(credit, "span", " · " + model.license);
+    add(credit, "span", " · ");
+    if (social?.licenseLink) social.licenseLink(credit, model.license);
+    else add(credit, "span", "Ver licencia en el catálogo");
     if (model.submittedBy) {
       const contribution = add(body, "p", "Compartido por ", "meta");
       const owner = add(contribution, "a", "@" + model.submittedBy);
