@@ -7,17 +7,19 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://tgvjkjxsaaatejkcwuxh.supabase.co; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Comunidad de creadores · Streamer Linux Bot</title>
 <link rel="stylesheet" href="../galeria/gallery.css">
-<link rel="stylesheet" href="community.css">
+<link rel="stylesheet" href="../catalog-social.css?v=catalog-social-1">
+<link rel="stylesheet" href="community.css?v=catalog-social-1">
 <script src="../editor/engine.js?v=editor-visual-1" defer></script>
 <script src="config.js?v=supabase-1" defer></script>
-<script src="community.js" defer></script>
+<script src="../catalog-social.js?v=catalog-social-1" defer></script>
+<script src="community.js?v=catalog-social-1" defer></script>
 </head>
 <body>
 <header class="site-nav"><div class="shell header-inner"><a class="brand" href="../galeria/">Streamer Linux Bot</a><nav aria-label="Estudio"><a href="../galeria/">Galería</a><a href="../editor/">Editor</a><a href="./" aria-current="page">Comunidad</a></nav></div></header>
 <main class="shell community">
-  <header class="hero"><div class="hero-copy"><p class="eyebrow">DISEÑA · COMPARTE · DA CRÉDITO</p><h1>Comunidad de creadores</h1><p>Prepara un diseño en el editor y súbelo para revisión. Cualquiera puede explorar o descargar sin iniciar sesión.</p></div><a class="button secondary" href="../editor/">Crear un diseño</a></header>
+  <header class="hero"><div class="hero-copy"><p class="eyebrow">DISEÑA · COMPARTE · DA CRÉDITO</p><h1>Comunidad de creadores</h1><p>Crea un overlay en el editor y publica su diseño aquí. Puedes explorar y descargar sin iniciar sesión; usa Google para publicar o votar.</p></div><a class="button secondary" href="../editor/">Crear un diseño</a></header>
   <p id="status" role="status" aria-live="polite">Comprobando el estado de los aportes…</p>
-  <section class="community-box">
+  <section class="community-box" id="creator-access">
     <h2>Comparte tu overlay</h2>
     <p id="auth-info">El nombre público lo eliges tú. Tu correo no se publica.</p>
     <div class="community-actions"><button class="button primary" id="sign-in" type="button" hidden>Iniciar sesión con Google</button><button class="button secondary" id="sign-out" type="button" hidden>Cerrar sesión</button></div>
@@ -26,14 +28,14 @@
       <label>Descripción <textarea id="description" required minlength="10" maxlength="280" rows="3"></textarea></label>
       <label>Licencia <select id="license"><option value="CC0-1.0">CC0 1.0</option><option value="CC-BY-4.0">CC BY 4.0</option><option value="CC-BY-SA-4.0">CC BY-SA 4.0</option></select></label>
       <label>HTML exportado por este editor <input id="file" type="file" accept=".html,.htm,text/html" required></label>
-      <p>Solo se envía el diseño que el editor reconoce, incluidos su HTML/CSS compatible y sus movimientos. No se ejecuta el archivo original.</p>
-      <label class="confirm"><input id="rights" type="checkbox" required> Tengo permiso para compartir este diseño con ese crédito y licencia.</label>
-      <button class="button primary" id="submit" type="submit">Enviar a revisión</button>
+      <p>Al publicar se muestran de inmediato los ajustes visuales y las animaciones. Tu HTML y CSS personalizados se quedan en el archivo original. El JavaScript se descarga por separado y nunca se publica.</p>
+      <p>Al publicar, confirmas que tienes derecho a compartir este diseño con el crédito y la licencia elegidos.</p>
+      <button class="button primary" id="submit" type="submit">Publicar diseño</button>
     </form>
     <div id="legacy"><p>Mientras se habilita Google, el editor permite <strong>Proponer diseño en GitHub</strong> con los ajustes visuales.</p><a href="../editor/">Abrir el editor</a></div>
     <div id="my" hidden><h3>Mis aportes</h3><ul id="my-list"></ul></div>
   </section>
-  <section aria-labelledby="published-title"><h2 id="published-title">Aportes aprobados</h2><p id="published-note">Solo aparecen diseños revisados.</p><div id="published" class="community-grid"></div></section>
+  <section aria-labelledby="published-title"><h2 id="published-title">Diseños publicados</h2><p id="published-note">Cargando diseños de la comunidad…</p><div id="published" class="community-grid"></div></section>
 </main>
 </body>
 </html>

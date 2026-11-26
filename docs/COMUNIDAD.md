@@ -18,7 +18,9 @@ No se usan contraseñas propias ni se comparten correos de Google.
    [Permisos de la API de Supabase](https://supabase.com/docs/guides/api/securing-your-api).
    En **SQL Editor → New query**, pega el contenido completo de la
    [migración de la comunidad](../supabase/migrations/202611260501_overlay_community.sql)
-   y pulsa **Run** una sola vez en el proyecto nuevo.
+   y pulsa **Run** una sola vez en el proyecto nuevo. Después aplica una vez la
+   [migración de publicación y estadísticas](../supabase/migrations/202611260550_overlay_catalog.sql).
+   En una instalación que ya tenga la primera, aplica solo la segunda.
 2. En Supabase, **Authentication → URL Configuration**, registra la URL
    de la comunidad como **Site URL** y **Redirect URL**:
    `https://garyquinn08.github.io/Streamer-Linux-Bot/comunidad/`.
@@ -36,42 +38,41 @@ No se usan contraseñas propias ni se comparten correos de Google.
 4. Copia la **Project URL** sin barra final desde el panel **Connect** y la
    clave que empieza con **`sb_publishable_`** desde **Settings → API Keys**.
    Son los únicos dos valores que van en `docs/comunidad/config.js`. En el CSP de
-   `docs/comunidad/index.html`, añade el origen exacto de ese proyecto
+   `docs/comunidad/index.html` y `docs/galeria/index.html`, añade el origen exacto de ese proyecto
    a `connect-src`. **Nunca** publiques una clave `service_role`,
    `sb_secret_`, el secreto de Google ni tokens de sesiones.
-5. Publica por la rama de Pages. Primero prueba con dos cuentas Google
-   permitidas: cada una debe ver solo sus propios aportes; una visita
-   sin cuenta debe poder descargar diseños aprobados, pero no acceder
-   a pendientes, enviarlos ni aprobarlos.
+5. Publica por la rama de Pages. Primero prueba con dos cuentas Google:
+   cada una debe ver solo sus propios aportes en «Mis aportes» y poder
+   cambiar su voto sin contarse dos veces. Una visita sin cuenta debe poder
+   explorar y descargar, pero no subir, votar ni consultar aportes privados.
 
-## Revisar propuestas
+## Publicación y estadísticas
 
-El archivo HTML original nunca se aloja. El editor vuelve a leer solo
-los datos reconocidos del archivo, incluidos CSS y animaciones compatibles.
-La web genera la nueva previsualización aislada y un HTML al descargar;
-no ejecuta scripts aportados. Aun así, abre y revisa cada propuesta,
-verifica el crédito y la licencia y no apruebes material que no quieras
-publicar. El nombre de crédito es elegido por el creador, y no equivale a
-un nombre verificado. Su identidad de Google no es pública.
+Los nuevos diseños se publican de inmediato, sin aprobación previa.
+El servidor conserva solo ajustes visuales y animaciones que reconoce.
+No aloja el archivo HTML original ni publica HTML, CSS o JavaScript
+personalizado; el editor vuelve a generar un HTML compatible al descargar.
+El crédito público lo elige la persona creadora y no equivale a una
+identidad verificada. No se muestra el correo de Google.
 
-Desde el SQL Editor del proyecto, busca los pendientes:
+**Puntuación:** se muestra el promedio y el número de votos. Cada cuenta
+Google tiene un voto editable de 1 a 5 por diseño. **Descargas:** se
+cuentan las descargas iniciadas desde la Galería y Comunidad, sin exigir
+cuenta. No se cuenta una previsualización, no se guardan IP ni correos
+para las estadísticas y no se reconstruyen las descargas anteriores a
+esta función. No es un número de personas únicas.
+
+## Retirar publicaciones
+
+Las propuestas ya pendientes antes del cambio conservan su estado y
+siguen privadas. Desde el SQL Editor del proyecto, un mantenedor puede
+retirar un diseño publicado, o aprobar uno de esos pendientes:
 
 ```sql
-select id, creator_name, description, license, design, created_at
-from public.overlay_submissions
-where status = 'pending'
-order by created_at;
+select public.review_overlay_submission('UUID-DEL-APORTE'::uuid, false);
+-- Solo para publicar un aporte anterior pendiente, usa true.
 ```
 
-Una vez revisado un aporte, puedes publicarlo o retirarlo:
-
-```sql
-select public.review_overlay_submission('UUID-DEL-APORTE'::uuid, true);
--- Sustituye true por false para rechazar o retirar un diseño.
-```
-
-Solo un mantenedor con acceso al proyecto puede ejecutar la revisión.
-Eliminar la cuenta en Supabase borra sus propuestas y publicaciones
-asociadas; las copias que otras personas ya descargaron no se retiran.
-Antes de abrir envíos a todo el mundo, define un contacto para
-privacidad y retiradas, y publica el aviso correspondiente.
+Eliminar una cuenta en Supabase borra sus propuestas, publicaciones y
+votos asociados; las copias que otras personas ya descargaron no se
+retiran.

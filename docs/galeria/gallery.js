@@ -2,6 +2,8 @@
 (() => {
   "use strict";
   const get = (id) => document.getElementById(id);
+  const social = window.SLB_SOCIAL;
+  const designKey = (model) => "gallery:" + model.id;
   const storageKey = "streamer-linux-bot.gallery.favorites.v1";
   const modes = { alert: "Alerta", chat: "Multichat", events: "Eventos" };
   const artKeys = new Set(["orbit", "wave", "grid", "ribbon", "spark", "scan"]);
@@ -183,6 +185,7 @@
       anchor.click();
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(object), 2000);
+      void social?.downloadStarted(designKey(model));
       get("notice").textContent = "Descargado " + model.preset.name + ". Impórtalo en Overlays → Importar HTML…";
     } catch {
       get("notice").textContent = "No se pudo descargar el diseño. Prueba el botón Personalizar y descarga desde el editor.";
@@ -263,6 +266,7 @@
     save.type = "button";
     save.setAttribute("aria-label", "Descargar HTML de " + model.preset.name);
     save.addEventListener("click", () => download(model));
+    social?.controls(body, { key: designKey(model), name: model.preset.name, signIn: "../comunidad/#creator-access" });
     return card;
   }
 
@@ -328,6 +332,8 @@
     isLoaded = true;
     get("designs").setAttribute("aria-busy", "false");
     render();
+    void social?.googleSession();
+    void social?.refresh(catalogue.map(designKey));
   }).catch(() => {
     get("status").textContent = "No se pudo cargar la galería.";
     get("designs").setAttribute("aria-busy", "false");
