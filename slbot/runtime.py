@@ -26,7 +26,8 @@ from .connectors.kick import KickConnector
 from .connectors.platforms import TwitchConnector, YoutubeConnector
 from .connectors.tiktok import TiktokConnector
 from .connectors.spotify import SpotifyConnector
-from .core.actions import run_action
+from .connectors.simulator import sample_event
+from .core.actions import run_action, overlay_variables
 from .core.config import Config, DEFAULT_ACTIONS, DEFAULT_TRIGGERS, Action, Trigger
 from .core.engine import Engine
 from .core.editing import update_rules
@@ -304,6 +305,7 @@ class Runtime:
         else:
             await self.overlays.broadcast(overlay_id, {
                 "channel": "alert", "overlay": overlay_id, "title": "viewer_demo envió Rose", "text": "x3",
+                "variables": overlay_variables(sample_event("gift")),
             })
 
     # -- ciclo de vida -----------------------------------------------------

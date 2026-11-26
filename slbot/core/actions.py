@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
@@ -48,6 +49,22 @@ def build_context(ev: Event) -> dict[str, str]:
     ctx = {"user": ev.user, "platform": ev.platform, "type": ev.type}
     ctx.update({str(k): str(v) for k, v in ev.data.items()})
     return ctx
+
+
+_OVERLAY_EVENT_FIELDS = ("gift_name", "count", "value", "amount", "currency", "text", "command",
+                         "bits", "tier", "reward", "timer", "timer_id", "interval", "simulated")
+
+
+def overlay_variables(ev: Event) -> dict[str, str | int | float | bool]:
+    """El overlay elegido recibe solo campos públicos conocidos del evento."""
+    values = {"user": ev.user[:100], "platform": ev.platform[:40], "type": ev.type[:80]}
+    for key in _OVERLAY_EVENT_FIELDS:
+        value = ev.data.get(key)
+        if isinstance(value, str):
+            values[key] = value[:500]
+        elif type(value) in (int, bool) or (type(value) is float and math.isfinite(value)):
+            values[key] = value
+    return values
 
 
 def render(value: Any, ctx: dict[str, str]) -> Any:
@@ -102,6 +119,7 @@ async def _overlay_alert(rt: "Runtime", p: dict[str, Any], ev: Event) -> None:
             "title": str(p.get("title", "")),
             "text": str(p.get("text", "")),
             "image": str(p.get("image", "")),
+            "variables": overlay_variables(ev),
         }
     )
 

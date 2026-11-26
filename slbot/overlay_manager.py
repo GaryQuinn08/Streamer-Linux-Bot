@@ -26,6 +26,7 @@ PARAM_TYPES = {"text", "number", "bool", "color", "select"}
 
 MAX_ZIP_FILES = 2000
 MAX_ZIP_BYTES = 50 * 1024 * 1024
+_HTML_IMPORT_DESCRIPTION = "HTML importado. Para recibir alertas debe usar el SDK local."
 
 
 @dataclass
@@ -253,8 +254,11 @@ def import_overlay(src: Path, overwrite: bool = False) -> OverlayInfo:
             root.mkdir()
             shutil.copy2(src, root / "index.html")
             name = src.stem[:80].strip() or "Overlay HTML"
-            manifest = {"id": _new_overlay_id(name), "name": name,
-                        "description": "HTML importado. Para recibir alertas debe usar el SDK local.",
+            saved = next((info for info in list_overlays().values()
+                          if info.source == "user" and info.name == name
+                          and info.description == _HTML_IMPORT_DESCRIPTION), None)
+            manifest = {"id": saved.id if saved else _new_overlay_id(name), "name": name,
+                        "description": _HTML_IMPORT_DESCRIPTION,
                         "params": []}
             (root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
         else:

@@ -68,6 +68,9 @@ class ServerTests(RuntimeCase):
                     self.assertEqual(alert["overlay"], "gift-alert")
                     self.assertEqual(alert["title"], "viewer_demo envió Rose")
                     self.assertEqual(alert["text"], "x3")
+                    self.assertEqual(alert["variables"]["gift_name"], "Rose")
+                    self.assertEqual(alert["variables"]["count"], 3)
+                    self.assertNotIn("connector_metadata", alert["variables"])
                     self.assertEqual(event["channel"], "event")
                     self.assertEqual(event["data"], {"gift_name": "Rose", "count": 3})
                     for ws in (gift, feed):

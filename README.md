@@ -6,7 +6,7 @@ Aplicación de escritorio para Linux que automatiza tu stream: recibe eventos
 (chat, seguidores, regalos, donaciones...), los pasa por **triggers** y ejecuta
 **acciones** (alertas en pantalla, cambios de escena en OBS, sonidos, TTS...).
 
-## Beta 9 para Linux
+## Beta 10 para Linux
 
 Instalación desde el repositorio sin ZIP ni dependencias de Qt de APT.
 Conserva el perfil de la beta anterior, incluido el catálogo y las alertas
@@ -31,6 +31,13 @@ En **Temporizadores**, elige una acción existente, establece el intervalo en se
 y actívalo. La primera ejecución espera un intervalo completo; si la acción anterior
 sigue en curso, no se acumulan ejecuciones. Consulta **Historial** para verificarlo.
 Funcionan mientras el bot esté abierto, o en modo servidor tras recargar el perfil.
+
+### Editor web y galería
+
+El [editor web de overlays](docs/EDITOR_WEB.md) vive en el mismo
+repositorio: diseña alertas, chat o actividad con controles o HTML/CSS,
+consulta las etiquetas y descarga un HTML para **Overlays → Importar
+HTML…**. La [galería](docs/GALERIA.md) admite aportes revisados por PR.
 
 ### Linux Mint, Ubuntu o Debian
 

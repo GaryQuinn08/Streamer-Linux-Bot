@@ -112,3 +112,10 @@ class OverlayBeta2Tests(RuntimeCase):
             self.assertIn(info.id, list_overlays())
             self.assertEqual((info.path / "index.html").read_text(encoding="utf-8"),
                              original.read_text(encoding="utf-8"))
+            original.write_text("<p>Edición nueva</p>", encoding="utf-8")
+            with self.assertRaises(FileExistsError):
+                import_overlay(original)
+            self.assertEqual((info.path / "index.html").read_text(encoding="utf-8"), "<p>Una alerta anterior</p>")
+            updated = import_overlay(original, overwrite=True)
+            self.assertEqual(updated.id, info.id)
+            self.assertEqual((updated.path / "index.html").read_text(encoding="utf-8"), "<p>Edición nueva</p>")

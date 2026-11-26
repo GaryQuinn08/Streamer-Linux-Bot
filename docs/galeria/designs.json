@@ -1,0 +1,32 @@
+[
+  {
+    "id": "aurora",
+    "description": "Una alerta suave de regalo, con destellos menta y tipografía amplia.",
+    "author": "Streamer Linux Bot",
+    "license": "CC0-1.0",
+    "preset": {
+      "mode": "alert", "name": "Aurora", "title": "{user} envió {gift_name}", "body": "×{count} · {platform}",
+      "accent": "#74efd2", "textColor": "#f5fffb", "background": "#12322c", "size": 42, "duration": 6, "opacity": 90
+    }
+  },
+  {
+    "id": "comunidad",
+    "description": "Chat claro y compacto para acompañar la conversación sin tapar el directo.",
+    "author": "Streamer Linux Bot",
+    "license": "CC0-1.0",
+    "preset": {
+      "mode": "chat", "name": "Comunidad", "title": "{user} · {platform}", "body": "{text}",
+      "accent": "#efbdff", "textColor": "#faf4ff", "background": "#251333", "size": 22, "duration": 15, "max": 5, "opacity": 82
+    }
+  },
+  {
+    "id": "pulso",
+    "description": "Últimos eventos con acento mandarina, listos para una escena de actividad.",
+    "author": "Streamer Linux Bot",
+    "license": "CC0-1.0",
+    "preset": {
+      "mode": "events", "name": "Pulso", "title": "{user}", "body": "{type} · {platform}",
+      "accent": "#ffbe7b", "textColor": "#fff8f0", "background": "#331f16", "size": 25, "duration": 10, "max": 6, "opacity": 92
+    }
+  }
+]
