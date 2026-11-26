@@ -16,9 +16,10 @@ from urllib.parse import quote, urlsplit
 
 from aiohttp import web
 
+from .chat_dock import ChatDock, load_key
 from .core.events import Event
 from .overlay_manager import find_overlay, list_overlays, validate_overlay_values
-from .paths import SDK_DIR
+from .paths import SDK_DIR, config_dir
 
 if TYPE_CHECKING:
     from .runtime import Runtime
@@ -37,8 +38,13 @@ class OverlayServer:
     def __init__(self, rt: "Runtime") -> None:
         self.rt = rt
         self.clients: dict[web.WebSocketResponse, str] = {}
+        self._chat_dock = ChatDock()
         self.port: int | None = None
         self._runner: web.AppRunner | None = None
+
+    @property
+    def chat_dock_path(self) -> str | None:
+        return self._chat_dock.path if self.port is not None else None
 
     # -- ciclo de vida -----------------------------------------------------
 
@@ -53,9 +59,11 @@ class OverlayServer:
                 web.get("/overlay/{id}", self._redirect_slash),
                 web.get("/overlay/{id}/", self._overlay_file),
                 web.get("/overlay/{id}/{path:.+}", self._overlay_file),
+                *self._chat_dock.routes(),
             ]
         )
-        runner = web.AppRunner(app, shutdown_timeout=2)
+        # Dock URLs contain a private capability and must not appear in access logs.
+        runner = web.AppRunner(app, shutdown_timeout=2, access_log=None)
         try:
             await runner.setup()
             await web.TCPSite(runner, "127.0.0.1", port).start()
@@ -64,9 +72,15 @@ class OverlayServer:
             raise
         self._runner = runner
         self.port = runner.addresses[0][1]
+        try:
+            path = self.rt.config.path
+            self._chat_dock.token = load_key(path.parent if path else config_dir())
+        except (OSError, ValueError):
+            self.rt.log("No se pudo habilitar el panel privado de chat: revisa los permisos del perfil.")
 
     async def stop(self) -> None:
         self.port = None
+        await self._chat_dock.stop()
         await asyncio.gather(*(ws.close(drain=False) for ws in list(self.clients)),
                              return_exceptions=True)
         if self._runner is not None:
@@ -103,11 +117,12 @@ class OverlayServer:
         if (ev.type != "chat" or ev.platform not in CHAT_PLATFORMS
                 or not isinstance(text, str) or not text.strip()):
             return
-        await self.broadcast("multi-chat", {
+        message = {
             "channel": "chat", "platform": ev.platform,
             "user": ev.user[:100] if isinstance(ev.user, str) else "",
             "text": text[:500], "simulated": ev.data.get("simulated") is True,
-        })
+        }
+        await asyncio.gather(self.broadcast("multi-chat", message), self._chat_dock.broadcast(message))
 
     # -- middleware --------------------------------------------------------
 

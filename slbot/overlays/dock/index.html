@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Chat privado · Streamer Linux Bot</title>
+<link rel="stylesheet" href="../chat.css">
+<script src="../chat.js" defer></script>
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">STREAMER LINUX BOT</p>
+      <h1>Chat privado</h1>
+    </div>
+    <p id="status" class="connection" role="status" data-state="waiting">Conectando…</p>
+  </header>
+  <main aria-label="Mensajes de chat">
+    <p id="empty">Cuando llegue un mensaje en Twitch, YouTube, Kick o TikTok, aparecerá aquí.</p>
+    <ol id="messages" aria-label="Chat en vivo" aria-live="polite"></ol>
+  </main>
+  <footer>
+    <span>Solo lectura · No aparece en el directo</span>
+    <button type="button" id="follow" hidden>Ir al último mensaje</button>
+  </footer>
+</body>
+</html>

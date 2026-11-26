@@ -41,10 +41,10 @@ html, body {
   animation: appear .18s ease-out;
 }
 
-.message[data-platform="twitch"] { --platform: #c39af9; }
-.message[data-platform="youtube"] { --platform: #ffa3a9; }
-.message[data-platform="kick"] { --platform: #aee587; }
-.message[data-platform="tiktok"] { --platform: #7ce8eb; }
+.message[data-platform="twitch"] { --platform: var(--chat-twitch, #c39af9); }
+.message[data-platform="youtube"] { --platform: var(--chat-youtube, #ffa3a9); }
+.message[data-platform="kick"] { --platform: var(--chat-kick, #aee587); }
+.message[data-platform="tiktok"] { --platform: var(--chat-tiktok, #a7adb7); }
 
 .platform, .demo {
   display: inline-block;
@@ -70,6 +70,10 @@ html, body {
   color: var(--chat-name);
   font-weight: 750;
 }
+
+.name-by-platform .sender { color: var(--platform); }
+.no-stripe .message { border-inline-start-color: transparent; }
+.sender[hidden], .separator[hidden] { display: none; }
 
 @keyframes appear {
   from { opacity: 0; transform: translateY(5px); }

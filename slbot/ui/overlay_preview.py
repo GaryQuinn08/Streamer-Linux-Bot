@@ -226,7 +226,7 @@ class OverlayPreview(QWidget):
         p.drawRoundedRect(rect, radius, radius)
         border = min(s["border"], rect.width(), rect.height())
         if border:
-            p.setBrush(QColor(s["accent"]))
+            p.setBrush(QColor(s.get("stripeColor", s["accent"])))
             if top:
                 band = QRectF(rect.x(), rect.y(), rect.width(), border)
             else:
@@ -238,9 +238,9 @@ class OverlayPreview(QWidget):
         size = s["size"]
         align = "left" if camera else s["align"]
         if platform:
-            shift = self._text(p, text_rect, platform.upper(), size * .56, s["accent"], align, True)
+            shift = self._text(p, text_rect, platform.upper(), size * .56, s.get("stripeColor", s["accent"]), align, True)
             text_rect.adjust(0, shift + size * .15, 0, 0)
-        shift = self._text(p, text_rect, text, size, s["textColor"], align, True)
+        shift = self._text(p, text_rect, text, size, s.get("nameColor", s["textColor"]), align, True)
         text_rect.adjust(0, shift + size * .13, 0, 0)
         self._text(p, text_rect, subtitle, size * .73, s["textColor"], align)
 
@@ -320,9 +320,24 @@ class OverlayPreview(QWidget):
             s.update(positionY=50, width=66, padding=24, radius=19, align="center")
             self._stack(p, s, [("Luna envió Rosa", "×3", "")])
         elif kind == "chat":
-            rows = [(name, message, source if opts.get("badges", True) else "")
-                    for name, source, message, _, _ in _SAMPLES["chat"] if opts.get(source.lower(), True)]
-            self._stack(p, s, rows[:opts.get("max", 8)])
+            rows = [(name, source, message) for name, source, message, _, _ in _SAMPLES["chat"]
+                    if opts.get(source.lower(), True)][:opts.get("max", 8)]
+            width = _W * s["width"] / 100
+            cards = []
+            for name, source, message in rows:
+                palette = opts.get(source.lower() + "Color", s["accent"])
+                show_names = opts.get("names", True)
+                data = (name if show_names else "", message, source if opts.get("badges", True) else "")
+                color = palette if opts.get("nameByPlatform", False) else s["accent"]
+                card_settings = {**s, "border": 3 if opts.get("platformStripe", True) else 0,
+                                 "stripeColor": palette, "nameColor": color}
+                cards.append((card_settings, data, self._height(card_settings, data, width)))
+            gap = max(6, s["size"] * .19)
+            area = self._position(s, width, sum(height for _, _, height in cards) + max(0, len(cards) - 1) * gap)
+            y = area.y()
+            for card_settings, data, height in cards:
+                self._card(p, QRectF(area.x(), y, width, height), card_settings, *data)
+                y += height + gap
         elif kind == "events":
             s.update(positionY=8, width=90)
             rows = [(name + " " + verb, "", source) for name, source, _, _, verb in _SAMPLES["events"]]

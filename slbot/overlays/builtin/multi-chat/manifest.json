@@ -1,19 +1,26 @@
 {
   "id": "multi-chat",
   "name": "Chat multiplataforma",
-  "description": "Muestra los nuevos mensajes de Twitch, YouTube, Kick y TikTok en una sola fuente para OBS o TikTok LIVE Studio. Configura qué plataformas se ven. No envía mensajes ni repite el historial.",
-  "version": "1.1.0",
+  "description": "Overlay del directo. Elige las plataformas, sus colores y qué nombres se muestran. Usa el panel privado para leer el multichat dentro de OBS sin agregarlo a la escena.",
+  "version": "1.2.0",
   "author": "Streamer Linux Bot",
   "params": [
-    { "key": "twitch", "label": "Mostrar Twitch", "type": "bool", "default": true },
-    { "key": "youtube", "label": "Mostrar YouTube", "type": "bool", "default": true },
-    { "key": "kick", "label": "Mostrar Kick", "type": "bool", "default": true },
-    { "key": "tiktok", "label": "Mostrar TikTok", "type": "bool", "default": true },
-    { "key": "badges", "label": "Mostrar etiquetas de plataforma", "type": "bool", "default": true },
-    { "key": "max", "label": "Máximo de mensajes visibles", "type": "number", "default": 8, "min": 1, "max": 24 },
-    { "key": "size", "label": "Tamaño del texto (px)", "type": "number", "default": 22, "min": 12, "max": 60 },
-    { "key": "duration", "label": "Segundos por mensaje (0 = sin límite)", "type": "number", "default": 15, "min": 0, "max": 300 },
-    { "key": "opacity", "label": "Opacidad del fondo (%)", "type": "number", "default": 78, "min": 0, "max": 100 },
-    { "key": "color", "label": "Color del nombre", "type": "color", "default": "#a8f1dd" }
+    {"key": "twitch", "label": "Mostrar Twitch", "type": "bool", "default": true},
+    {"key": "youtube", "label": "Mostrar YouTube", "type": "bool", "default": true},
+    {"key": "kick", "label": "Mostrar Kick", "type": "bool", "default": true},
+    {"key": "tiktok", "label": "Mostrar TikTok", "type": "bool", "default": true},
+    {"key": "badges", "label": "Mostrar etiquetas de plataforma", "type": "bool", "default": true},
+    {"key": "names", "label": "Mostrar nombres de espectadores", "type": "bool", "default": true},
+    {"key": "platformStripe", "label": "Mostrar borde del color de la plataforma", "type": "bool", "default": true},
+    {"key": "nameByPlatform", "label": "Colorear el nombre por plataforma", "type": "bool", "default": false},
+    {"key": "twitchColor", "label": "Color de Twitch", "type": "color", "default": "#c39af9"},
+    {"key": "youtubeColor", "label": "Color de YouTube", "type": "color", "default": "#ffa3a9"},
+    {"key": "kickColor", "label": "Color de Kick", "type": "color", "default": "#aee587"},
+    {"key": "tiktokColor", "label": "Color de TikTok", "type": "color", "default": "#a7adb7"},
+    {"key": "max", "label": "Máximo de mensajes visibles", "type": "number", "default": 8, "min": 1, "max": 24},
+    {"key": "size", "label": "Tamaño del texto (px)", "type": "number", "default": 22, "min": 12, "max": 60},
+    {"key": "duration", "label": "Segundos por mensaje (0 = sin límite)", "type": "number", "default": 15, "min": 0, "max": 300},
+    {"key": "opacity", "label": "Opacidad del fondo (%)", "type": "number", "default": 78, "min": 0, "max": 100},
+    {"key": "color", "label": "Color general del nombre", "type": "color", "default": "#a8f1dd"}
   ]
 }

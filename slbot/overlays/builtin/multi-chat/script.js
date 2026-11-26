@@ -4,13 +4,14 @@
   const platforms = new Map([
     ["twitch", "Twitch"], ["youtube", "YouTube"], ["kick", "Kick"], ["tiktok", "TikTok"]
   ]);
+  const colors = {twitch:"#c39af9", youtube:"#ffa3a9", kick:"#aee587", tiktok:"#a7adb7"};
   const chat = document.getElementById("chat");
   const root = document.documentElement.style;
   const query = new URLSearchParams(window.location.search);
   const rows = new Map();
   const fadeMs = 320;
   let saved = null;
-  let maxLines, duration, badges;
+  let maxLines, duration, badges, names;
 
   function param(key, fallback) {
     if (query.has(key)) return query.get(key);
@@ -23,8 +24,19 @@
     return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
   }
 
-  function enabled(key) {
-    return ["1", "true", "yes", "si", "on"].includes(String(param(key, "true")).toLowerCase());
+  function enabled(key, fallback = true) {
+    return ["1", "true", "yes", "si", "on"].includes(String(param(key, String(fallback))).toLowerCase());
+  }
+
+  function colorParam(key, fallback) {
+    const value = param(key, fallback);
+    return /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+  }
+
+  function updateLabels(entry) {
+    entry.badge.hidden = !badges;
+    entry.sender.hidden = !names;
+    entry.separator.hidden = !names;
   }
 
   function tag(parent, cls, text, name = "span") {
@@ -66,14 +78,18 @@
     const previousDuration = duration;
     duration = clamp("duration", 15, 0, 300);
     badges = enabled("badges");
-    const accent = param("color", "#a8f1dd");
-    root.setProperty("--chat-name", /^#[0-9a-f]{6}$/i.test(accent) ? accent : "#a8f1dd");
+    names = enabled("names");
+    chat.classList.toggle("name-by-platform", enabled("nameByPlatform", false));
+    chat.classList.toggle("no-stripe", !enabled("platformStripe"));
+    root.setProperty("--chat-name", colorParam("color", "#a8f1dd"));
+    for (const [key, fallback] of Object.entries(colors))
+      root.setProperty("--chat-" + key, colorParam(key + "Color", fallback));
     root.setProperty("--chat-size", clamp("size", 22, 12, 60) + "px");
     root.setProperty("--chat-opacity", clamp("opacity", 78, 0, 100) / 100);
     for (const [row, entry] of rows) {
       if (!enabled(row.dataset.platform)) remove(row);
       else {
-        entry.badge.hidden = !badges;
+        updateLabels(entry);
         if (duration !== previousDuration) schedule(row, entry);
       }
     }
@@ -100,14 +116,14 @@
     const simulated = message.simulated === true;
     if (simulated) tag(row, "demo", "Prueba");
     const badge = tag(row, "platform", platform);
-    badge.hidden = !badges;
     const sender = typeof message.user === "string" ? message.user.slice(0, 100) : "";
-    tag(row, "sender", sender || platform, "bdi");
-    row.appendChild(document.createTextNode(" · "));
+    const senderNode = tag(row, "sender", sender || "Espectador", "bdi");
+    const separator = tag(row, "separator", " · ");
     tag(row, "text", message.text.slice(0, 500), "bdi");
 
     chat.appendChild(row);
-    const entry = { at: performance.now(), simulated, badge, timer: undefined };
+    const entry = { at: performance.now(), simulated, badge, sender: senderNode, separator, timer: undefined };
+    updateLabels(entry);
     rows.set(row, entry);
     schedule(row, entry);
     trim();

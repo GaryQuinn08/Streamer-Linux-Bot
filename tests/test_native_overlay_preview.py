@@ -99,6 +99,36 @@ class NativePreviewTests(unittest.TestCase):
         self.assertAlmostEqual(motion("pop", 1, True)[3], .88)
         self.assertLess(motion("slide-left", 1, True)[1], 0)
 
+    def test_chat_scope_is_previewed_but_not_written_to_other_overlays(self):
+        from urllib.parse import parse_qs, urlsplit
+        self.runtime.overlays.port = 8765
+        self.tab.refresh(select_id="multi-chat")
+        self.assertTrue(self.tab.output_scope.isVisible())
+        self.assertTrue(self.tab.dock_group.isVisible())
+        self.assertEqual(self.tab.url.text(), "http://127.0.0.1:8765/overlay/multi-chat/")
+        from unittest.mock import PropertyMock
+        from PySide6.QtGui import QGuiApplication
+        expected_path = "/dock/chat/" + "a" * 32 + "/"
+        with patch.object(type(self.runtime.overlays), "chat_dock_path", new_callable=PropertyMock,
+                          return_value=expected_path):
+            self.tab._update_url()
+            self.assertTrue(self.tab.copy_dock.isEnabled())
+            self.tab.copy_dock.click()
+            self.assertEqual(QGuiApplication.clipboard().text(), "http://127.0.0.1:8765" + expected_path)
+            self.assertNotIn(expected_path, self.tab.url.text())
+            QGuiApplication.clipboard().clear()
+        self.tab.scope.setCurrentIndex(self.tab.scope.findData("twitch"))
+        self.assertEqual(parse_qs(urlsplit(self.tab.url.text()).query),
+                         {"twitch": ["true"], "tiktok": ["false"], "youtube": ["false"], "kick": ["false"]})
+        self.assertEqual(self.tab.preview.model.settings["tiktok"], False)
+        self.tab._set_value("twitchColor", "#7812ab")
+        self.assertEqual(self.tab.preview.model.settings["twitchColor"], "#7812ab")
+        self.assertNotIn("overlay_presets", self.runtime.config.settings)
+        self.choose("banner")
+        self.assertFalse(self.tab.output_scope.isVisible())
+        self.assertFalse(self.tab.dock_group.isVisible())
+        self.assertEqual(urlsplit(self.tab.url.text()).query, "")
+
     def test_html_without_metadata_remains_external(self):
         source = self.root / "libre.html"
         source.write_text("<script>throw Error('do not run')</script>", encoding="utf-8")

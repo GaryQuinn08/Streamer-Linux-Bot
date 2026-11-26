@@ -5,6 +5,7 @@ import functools
 import json
 import re
 from pathlib import Path
+from urllib.parse import urlencode
 
 from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QGuiApplication, QIntValidator
@@ -547,6 +548,42 @@ class OverlaysTab(QWidget):
         self.form.setSizeConstraint(QLayout.SetMinimumSize)
         self.url = QLineEdit()
         self.url.setReadOnly(True)
+        self.output_scope = QWidget()
+        scope_row = QHBoxLayout(self.output_scope)
+        scope_row.setContentsMargins(0, 0, 0, 0)
+        scope_row.addWidget(QLabel("Plataforma de este enlace:"))
+        self.scope = QComboBox()
+        self.scope.setObjectName("chatOverlayScope")
+        for label, platform in (
+            ("Según los ajustes del overlay", ""), ("Solo Twitch", "twitch"),
+            ("Solo TikTok", "tiktok"), ("Solo YouTube", "youtube"), ("Solo Kick", "kick"),
+        ):
+            self.scope.addItem(label, platform)
+        self.scope.currentIndexChanged.connect(self._select_chat_scope)
+        scope_row.addWidget(self.scope, 1)
+
+        self.dock_group = QGroupBox("Panel privado de chat para OBS")
+        dock_layout = QVBoxLayout(self.dock_group)
+        dock_help = QLabel(
+            "En OBS abre Paneles → Paneles de navegador personalizados y pega este enlace. "
+            "Verás la plataforma en cada mensaje real, aunque la ocultes en el overlay. "
+            "No agregues este enlace como fuente ni lo compartas."
+        )
+        dock_help.setWordWrap(True)
+        dock_layout.addWidget(dock_help)
+        dock_actions = QHBoxLayout()
+        self.copy_dock = QPushButton("Copiar enlace del panel privado")
+        self.copy_dock.setObjectName("copyPrivateChatDock")
+        self.copy_dock.clicked.connect(self._copy_chat_dock)
+        self.open_dock = QPushButton("Abrir panel en navegador")
+        self.open_dock.clicked.connect(self._open_chat_dock)
+        dock_actions.addWidget(self.copy_dock)
+        dock_actions.addWidget(self.open_dock)
+        dock_actions.addStretch(1)
+        dock_layout.addLayout(dock_actions)
+        self.dock_status = QLabel()
+        self.dock_status.setWordWrap(True)
+        dock_layout.addWidget(self.dock_status)
         buttons = QHBoxLayout()
         self.copy_btn = QPushButton("Copiar URL para OBS / LIVE Studio")
         self.copy_btn.clicked.connect(self._copy_url)
@@ -581,9 +618,11 @@ class OverlaysTab(QWidget):
         right.addLayout(edits)
         right.addWidget(self.status)
         right.addWidget(QLabel("URL del overlay:"))
+        right.addWidget(self.output_scope)
         right.addWidget(self.url)
         right.addWidget(self.overlay_hint)
         right.addLayout(buttons)
+        right.addWidget(self.dock_group)
         right.addWidget(self.form_host)
         right.addStretch(1)
         scroll = QScrollArea()
@@ -639,7 +678,7 @@ class OverlaysTab(QWidget):
                 "OBS: al pegar esta URL en las propiedades de la fuente Navegador, marca "
                 "«Actualizar el navegador cuando la escena se active». "
                 "Al recargarse, la fuente empieza sin los mensajes anteriores. "
-                "Abre la fuente antes de pulsar «Probar en OBS»."
+                "Si emites simultáneamente en Twitch, usa Solo Twitch en la fuente pública y deja el multichat en privado."
             )
         else:
             self.overlay_hint.setText(
@@ -690,7 +729,10 @@ class OverlaysTab(QWidget):
     def _refresh_preview(self) -> None:
         if self._info is None:
             return
-        self.preview.set_overlay(self._info, self._values)
+        values = self._values
+        if self._info.id == "multi-chat" and (selected := self.scope.currentData()):
+            values = {**values, **{key: self._to_text(key == selected) for key in ("twitch", "tiktok", "youtube", "kick")}}
+        self.preview.set_overlay(self._info, values)
         self.play_preview.setVisible(self.preview.can_play)
         self.play_exit.setVisible(self.preview.can_exit)
         if self.preview.model:
@@ -758,12 +800,41 @@ class OverlaysTab(QWidget):
     def _update_url(self) -> None:
         port = self.rt.port
         ready = port is not None and self._info is not None
-        self.url.setText(f"http://127.0.0.1:{port}/overlay/{self._info.id}/" if ready else "")
+        multichat = self._info is not None and self._info.id == "multi-chat"
+        self.output_scope.setVisible(multichat)
+        self.dock_group.setVisible(multichat)
+        url = f"http://127.0.0.1:{port}/overlay/{self._info.id}/" if ready else ""
+        if url and multichat and (selected := self.scope.currentData()):
+            url += "?" + urlencode({key: self._to_text(key == selected) for key in ("twitch", "tiktok", "youtube", "kick")})
+        self.url.setText(url)
         self.url.setPlaceholderText("Asigna un puerto desde Inicio para generar la URL.")
+        dock_ready = bool(multichat and self._chat_dock_url())
+        self.copy_dock.setEnabled(dock_ready)
+        self.open_dock.setEnabled(dock_ready)
+        self.dock_status.setText("" if dock_ready else
+            "Activa el servidor de overlays desde Inicio." if not ready else "No está disponible el enlace del panel privado.")
         for button in (self.copy_btn, self.open_btn):
             button.setEnabled(ready)
         kind = self._info.appearance.kind if self._info and self._info.appearance else None
         self.preview_btn.setEnabled(ready and (kind is None or kind in {"alert", "chat", "events"}))
+
+    def _select_chat_scope(self) -> None:
+        self._refresh_preview()
+        self._update_url()
+
+    def _chat_dock_url(self) -> str:
+        port = self.rt.port
+        path = getattr(self.rt.overlays, "chat_dock_path", None)
+        return f"http://127.0.0.1:{port}{path}" if port is not None and path else ""
+
+    def _copy_chat_dock(self) -> None:
+        if url := self._chat_dock_url():
+            QGuiApplication.clipboard().setText(url)
+            self.dock_status.setText("Enlace del panel privado copiado.")
+
+    def _open_chat_dock(self) -> None:
+        if url := self._chat_dock_url():
+            QDesktopServices.openUrl(QUrl(url))
 
     def _copy_url(self) -> None:
         if self.url.text():

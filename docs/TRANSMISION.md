@@ -18,6 +18,31 @@
   virtual como fuente de LIVE Studio. La cámara virtual solo lleva video;
   configura el audio por separado en LIVE Studio.
 
+## Multichat: panel privado y overlay para el directo
+
+En **Overlays → Chat multiplataforma** hay dos salidas distintas:
+
+- **Panel privado de chat para OBS.** Pulsa **Copiar enlace del panel privado**.
+  En OBS, abre **Paneles → Paneles de navegador personalizados** (*Docks →
+  Custom Browser Docks*), crea un panel y pega el enlace. El panel siempre
+  escribe la plataforma junto al mensaje e incluye todas las plataformas
+  conectadas; los filtros del overlay no le afectan. Es de solo lectura.
+  No agregues su enlace como fuente ni lo compartas. Si OBS no ofrece ese tipo
+  de panel, el botón **Abrir panel en navegador** permite usarlo en privado.
+- **Overlay del directo.** En los ajustes puedes mostrar el nombre del
+  espectador y la etiqueta de plataforma por separado, personalizar el color
+  de Twitch (morado por defecto), TikTok (gris), YouTube y Kick, y aplicarlo
+  al borde o al nombre. Guarda los cambios para verlos en las fuentes abiertas.
+  Como antes, **Actualizar el navegador cuando la escena se active** limpia los
+  mensajes anteriores al volver a la escena.
+
+**Plataforma de este enlace** permite copiar una fuente separada, p. ej. **Solo
+Twitch**. Solo cambia el enlace que estás copiando: puedes usar otro para TikTok
+y conservar el panel privado con ambos chats. Si envías la misma escena a dos
+destinos, no pongas un overlay con chats combinados en la salida de Twitch
+durante un simulcast. [Directrices de Twitch](https://help.twitch.tv/s/article/simulcasting-guidelines?language=es_MX).
+El bot no activa el simulcast ni inicia la emisión.
+
 ## Modo servidor de Linux, sin escritorio
 
 Dentro del clon, en la máquina Linux que ejecutará el bot:
