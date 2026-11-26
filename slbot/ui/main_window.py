@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QGuiApplication, QIntValidator, QPixmap
+from PySide6.QtGui import QColor, QDesktopServices, QGuiApplication, QIntValidator
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QHeaderView,
     QLabel,
+    QLayout,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -44,6 +45,7 @@ from ..overlay_manager import OverlayInfo, create_alert, import_overlay, list_ov
 from ..runtime import Runtime
 from .rule_editor import ActionWorkspace, RulesPanel
 from .platform_login import PlatformLoginPanel
+from .overlay_preview import OverlayPreview
 
 SAMPLE_LABELS = {
     "gift": "Regalo (TikTok)",
@@ -528,11 +530,21 @@ class OverlaysTab(QWidget):
         self.desc = QLabel()
         self.desc.setTextFormat(Qt.PlainText)
         self.desc.setWordWrap(True)
-        self.preview = QLabel()
-        self.preview.setAlignment(Qt.AlignCenter)
-        self.preview.setMinimumHeight(120)
+        self.preview = OverlayPreview()
+        playback = QHBoxLayout()
+        self.play_preview = QPushButton("Reproducir vista previa")
+        self.play_preview.clicked.connect(self.preview.play)
+        self.play_exit = QPushButton("Ver salida")
+        self.play_exit.setToolTip("Muestra la animación de salida sin esperar la duración.")
+        self.play_exit.clicked.connect(self.preview.play_exit)
+        playback.addWidget(self.play_preview)
+        playback.addWidget(self.play_exit)
+        playback.addStretch(1)
+        self.preview_hint = QLabel()
+        self.preview_hint.setWordWrap(True)
         self.form_host = QWidget()
         self.form = QFormLayout(self.form_host)
+        self.form.setSizeConstraint(QLayout.SetMinimumSize)
         self.url = QLineEdit()
         self.url.setReadOnly(True)
         buttons = QHBoxLayout()
@@ -540,7 +552,7 @@ class OverlaysTab(QWidget):
         self.copy_btn.clicked.connect(self._copy_url)
         self.open_btn = QPushButton("Abrir en el navegador")
         self.open_btn.clicked.connect(self._open_url)
-        self.preview_btn = QPushButton("Probar alerta")
+        self.preview_btn = QPushButton("Probar en OBS")
         self.preview_btn.clicked.connect(self._preview)
         buttons.addWidget(self.copy_btn)
         buttons.addWidget(self.open_btn)
@@ -562,7 +574,10 @@ class OverlaysTab(QWidget):
 
         right.addWidget(self.title)
         right.addWidget(self.desc)
+        right.addWidget(QLabel("Vista previa local"))
         right.addWidget(self.preview)
+        right.addLayout(playback)
+        right.addWidget(self.preview_hint)
         right.addLayout(edits)
         right.addWidget(self.status)
         right.addWidget(QLabel("URL del overlay:"))
@@ -575,6 +590,7 @@ class OverlaysTab(QWidget):
         scroll.setWidgetResizable(True)
         detail = QWidget()
         right.setContentsMargins(4, 0, 6, 0)
+        right.setSizeConstraint(QLayout.SetMinimumSize)
         detail.setLayout(right)
         scroll.setWidget(detail)
         root.addWidget(scroll, 1)
@@ -623,28 +639,19 @@ class OverlaysTab(QWidget):
                 "OBS: al pegar esta URL en las propiedades de la fuente Navegador, marca "
                 "«Actualizar el navegador cuando la escena se active». "
                 "Al recargarse, la fuente empieza sin los mensajes anteriores. "
-                "Abre la fuente antes de pulsar «Probar alerta»."
+                "Abre la fuente antes de pulsar «Probar en OBS»."
             )
         else:
             self.overlay_hint.setText(
                 "Abre la URL en el navegador o como fuente de OBS antes de probar. "
                 "Después de guardar la apariencia, actualiza la fuente para verla."
             )
-        preview = info.preview_path
-        pixmap = QPixmap(str(preview)) if preview else QPixmap()
-        if not pixmap.isNull():
-            self.preview.setPixmap(pixmap.scaledToHeight(160, Qt.SmoothTransformation))
-        else:
-            self.preview.setPixmap(QPixmap())
-            self.preview.setText("(sin vista previa)")
         self._build_form(info)
         self.status.clear()
         self.save_btn.setEnabled(bool(info.params))
         self.reset_btn.setEnabled(bool(info.params))
         self.delete_btn.setEnabled(info.source == "user" and self._deleting is None)
         self.delete_btn.setToolTip("Los overlays incluidos no se eliminan." if info.source == "builtin" else "")
-        kind = info.appearance.kind if info.appearance else None
-        self.preview_btn.setText({"chat": "Probar chat", "events": "Probar actividad"}.get(kind, "Probar alerta"))
         if info.appearance:
             self.desc.setText(info.description + "\nPersonaliza el diseño y guarda. Los cambios mantienen tu URL.")
         elif not info.params and info.source == "user":
@@ -678,6 +685,21 @@ class OverlaysTab(QWidget):
             label = QLabel(str(p.get("label", key)))
             label.setTextFormat(Qt.PlainText)
             self.form.addRow(label, self._make_widget(p, value))
+        self._refresh_preview()
+
+    def _refresh_preview(self) -> None:
+        if self._info is None:
+            return
+        self.preview.set_overlay(self._info, self._values)
+        self.play_preview.setVisible(self.preview.can_play)
+        self.play_exit.setVisible(self.preview.can_exit)
+        if self.preview.model:
+            msg = "Muestra local con datos ficticios. No envía nada a OBS ni requiere puerto."
+            if self._info.appearance and self._info.appearance.editor_export:
+                msg += " El HTML/CSS personalizado se ve completo en el navegador u OBS."
+        else:
+            msg = "Para ver un diseño externo tal como se renderiza, usa su URL en el navegador u OBS."
+        self.preview_hint.setText(msg)
 
     @staticmethod
     def _to_text(value) -> str:
@@ -688,6 +710,7 @@ class OverlaysTab(QWidget):
     def _set_value(self, key: str, value) -> None:
         self._values[key] = self._to_text(value)
         self.status.setText("Cambios sin guardar.")
+        self._refresh_preview()
 
     def _make_widget(self, p: dict, default) -> QWidget:
         key, kind = p["key"], p["type"]
@@ -753,7 +776,7 @@ class OverlaysTab(QWidget):
     def _preview(self) -> None:
         if self._info and self.rt.port is not None:
             self.rt.submit(self.rt.preview_overlay(self._info.id))
-            self.status.setText("Vista de prueba enviada. La página debe estar abierta para verla.")
+            self.status.setText("Evento de prueba enviado a la fuente abierta en OBS o en el navegador.")
 
     def _save_preset(self) -> None:
         changes = {key: value for key, value in self._values.items() if value != self._defaults[key]}

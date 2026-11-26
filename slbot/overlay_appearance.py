@@ -1,6 +1,7 @@
 """Editable settings for current packs and recognizable older SLB exports."""
 from __future__ import annotations
 
+import hashlib
 import html
 import json
 import re
@@ -22,12 +23,15 @@ _FIELDS = {
     "exit": ("Animación de salida", "select"), "exitMs": ("Salida (ms)", "number"),
 }
 _EFFECTS = ["none", "fade", "slide-up", "slide-left", "zoom", "pop"]
-_MOTION = {
-    "none": ("none", "none"), "fade": ("none", "none"), "slide-up": ("translateY(24px)", "translateY(-24px)"),
-    "slide-left": ("translateX(24px)", "translateX(-24px)"), "zoom": ("scale(.88)", "scale(.88)"),
-    "pop": ("scale(.84)", "scale(.88)"),
-}
 _EDITOR_CALL = re.compile(r'\}\)\((\{[^\n]*\})\);(?=</script>\s*</body>\s*</html>\s*$)')
+# The exact built-in dynamic script shipped before entrance duration was honored.
+_OLD_PACK_SCRIPT_HASH = "337b82ac7923acd036d2a642032de58db321e668981d4df7bdb0ddb9afc1cecc"
+_OLD_WEB_TIMER = "      if (timed && duration > 0) timers.set(row, setTimeout(() => dismiss(row), duration * 1000));"
+_WEB_TIMER = (
+    '      const entrance = row.classList.contains("slb-enter")\n'
+    '        && !doc.defaultView?.matchMedia("(prefers-reduced-motion: reduce)").matches ? config.enterMs : 0;\n'
+    "      if (timed && duration > 0) timers.set(row, setTimeout(() => dismiss(row), entrance + duration * 1000));"
+)
 
 
 @dataclass(frozen=True)
@@ -81,6 +85,34 @@ class Appearance:
                 if patched is not None:
                     return patched
         return render_piece(self.kind, values)
+
+    def refresh_live(self, folder: Path) -> str | None:
+        """Upgrade only known older generated runtimes, without touching the imported file."""
+        from .overlay_pack import DYNAMIC, RUNTIME, STYLE, pack_motion_style
+
+        if self.kind not in DYNAMIC:
+            return None
+        source = _read(folder / "index.html")
+        if not source:
+            return None
+        if self.editor_export:
+            upgraded = _refresh_web_timer(source)
+            return upgraded if upgraded != source else None
+        head, marker, tail = source.rpartition("<script>")
+        script, end, rest = tail.partition("</script>")
+        if marker and end and hashlib.sha256(script.encode()).hexdigest() == _OLD_PACK_SCRIPT_HASH:
+            head = head.replace(STYLE + "</style>", STYLE + pack_motion_style(self.defaults) + "</style>", 1)
+            return head + marker + RUNTIME + end + rest
+        return None
+
+
+def _refresh_web_timer(source: str) -> str:
+    # Patch the known renderer block, never matching an unrelated string in a user's template.
+    marker = "<script>function renderEngine("
+    start = source.rfind(marker)
+    if start == -1 or not _EDITOR_CALL.search(source, start):
+        return source
+    return source[:start] + source[start:].replace(_OLD_WEB_TIMER, _WEB_TIMER, 1)
 
 
 def _read(path: Path) -> str | None:
@@ -176,6 +208,9 @@ def load_appearance(folder: Path, name: str) -> Appearance | None:
 
 
 def _patch_editor(source: str, c: dict, overrides: dict) -> str | None:
+    from .overlay_pack import motion_keyframes
+
+    source = _refresh_web_timer(source)
     match = _EDITOR_CALL.search(source)
     if not match or "</style>" not in source:
         return None
@@ -201,7 +236,7 @@ def _patch_editor(source: str, c: dict, overrides: dict) -> str | None:
         css += f":root{{--slb-x:{(100-c['width'])*c['positionX']/100:g}%}}"
     if "positionY" in overrides:
         css += f":root{{--slb-y:{c['positionY']}%;--slb-shift-y:-{c['positionY']}%}}"
-    for i, (event, token, timing) in enumerate((("enter", "in", "ease-out"), ("exit", "out", "ease-in"))):
+    for i, (event, token, timing) in enumerate((("enter", "in", "cubic-bezier(.2,.75,.35,1)"), ("exit", "out", "ease-in"))):
         if event not in overrides and event + "Ms" not in overrides:
             continue
         duration, effect = c[event + "Ms"], c[event]
@@ -209,10 +244,7 @@ def _patch_editor(source: str, c: dict, overrides: dict) -> str | None:
         if not duration or effect == "none":
             css += selector + "{animation:none}"
             continue
-        hidden = "opacity:0;transform:" + _MOTION[effect][i]
-        shown = "opacity:1;transform:none"
-        start, end = (shown, hidden) if i else (hidden, shown)
-        css += f"@keyframes slb-custom-{token}{{from{{{start}}}to{{{end}}}}}"
+        css += f"@keyframes slb-custom-{token}{{{motion_keyframes(effect, leaving=bool(i))}}}"
         css += selector + f"{{animation:slb-custom-{token} {duration}ms {timing} both}}"
         css += f"@media(prefers-reduced-motion:reduce){{{selector}{{animation:none!important}}}}"
     return source.replace("</style>", "\n" + css + "</style>", 1)

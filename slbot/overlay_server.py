@@ -203,4 +203,7 @@ class OverlayServer:
                 if checked:
                     body = info.appearance.render(info.path, checked)
                     return web.Response(text=body, content_type="text/html", headers=NO_STORE)
+            upgraded = info.appearance.refresh_live(info.path)
+            if upgraded is not None:
+                return web.Response(text=upgraded, content_type="text/html", headers=NO_STORE)
         return web.FileResponse(target, headers=NO_STORE)

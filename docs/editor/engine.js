@@ -341,7 +341,10 @@
       while (stage.children.length > config.max) remove(stage.firstElementChild);
       const sampled = msg.simulated === true || msg.variables?.simulated === true;
       const duration = sampled && labelSample ? Math.min(config.duration || 8, 8) : config.duration;
-      if (timed && duration > 0) timers.set(row, setTimeout(() => dismiss(row), duration * 1000));
+      // La duración es el tiempo visible: no recortes la entrada con un valor corto.
+      const entrance = row.classList.contains("slb-enter")
+        && !doc.defaultView?.matchMedia("(prefers-reduced-motion: reduce)").matches ? config.enterMs : 0;
+      if (timed && duration > 0) timers.set(row, setTimeout(() => dismiss(row), entrance + duration * 1000));
     }
     return { draw };
   }

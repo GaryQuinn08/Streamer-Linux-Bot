@@ -75,14 +75,15 @@ RUNTIME = r"""
     const h=document.createElement('h1');h.textContent=expand(config.title);
     const p=document.createElement('p');p.textContent=expand(config.body);
     card.append(label,h,p);stage.append(card);
-    if(config.enter!=='none' && config.enterMs>0)card.classList.add('enter');
+    const entrance=config.enter!=='none'&&config.enterMs>0&&!matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(entrance)card.classList.add('enter');
     while(stage.childElementCount>config.max)stage.firstElementChild.remove();
     if(config.duration) setTimeout(()=>{
       if(!card.isConnected)return;
       if(config.exit!=='none'&&config.exitMs>0&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
         card.classList.remove('enter');card.classList.add('leave');setTimeout(()=>card.remove(),config.exitMs);
       }else card.remove();
-    },config.duration*1000);
+    },(entrance?config.enterMs:0)+config.duration*1000);
   };
   const channel=config.mode==='alert'?id:config.mode==='chat'?'multi-chat':'event-feed';
   const connect=()=>{
@@ -160,6 +161,27 @@ def read_pack(source: Path) -> tuple[str, str, list[tuple[str,dict]]]:
     return name,_text(raw.get("description"),240).strip(),out
 
 
+def motion_keyframes(effect: str, leaving: bool = False) -> str:
+    """Match the standalone web editor's supported output effects."""
+    transforms = {
+        "none": ("none", "none"), "fade": ("none", "none"),
+        "slide-up": ("translateY(24px)", "translateY(-24px)"),
+        "slide-left": ("translateX(24px)", "translateX(-24px)"),
+        "zoom": ("scale(.88)", "scale(.88)"), "pop": ("scale(.84)", "scale(.88)"),
+    }
+    shown = "opacity:1;transform:none"
+    hidden = "opacity:0;transform:" + transforms[effect][int(leaving)]
+    start, end = (shown, hidden) if leaving else (hidden, shown)
+    middle = "68%{opacity:1;transform:scale(" + ("1.05" if leaving else "1.06") + ")}" if effect == "pop" else ""
+    return "from{" + start + "}" + middle + "to{" + end + "}"
+
+
+def pack_motion_style(config: dict) -> str:
+    return ("@keyframes slb-in{" + motion_keyframes(config["enter"]) + "}"
+            "@keyframes slb-out{" + motion_keyframes(config["exit"], leaving=True) + "}"
+            ".card.enter{animation-timing-function:cubic-bezier(.2,.75,.35,1)}")
+
+
 def render_piece(kind: str, c: dict) -> str:
     dyn=kind in DYNAMIC
     colors = {
@@ -180,6 +202,7 @@ def render_piece(kind: str, c: dict) -> str:
     css=":root{"+";".join("--"+k+":"+v for k,v in props.items())+"}"+STYLE
     policy="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"
     if dyn:
+        css += pack_motion_style(c)
         policy+="; script-src 'unsafe-inline'; connect-src ws://127.0.0.1:* ws://localhost:* wss://127.0.0.1:* wss://localhost:*"
         payload=json.dumps(c,ensure_ascii=True).replace("<",r"\u003c").replace(">",r"\u003e").replace("&",r"\u0026")
         body='<main id="stage" class="stage"></main><script type="application/json" id="slb-pack-data">'+payload+"</script><script>"+RUNTIME+"</script>"

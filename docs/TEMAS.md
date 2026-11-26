@@ -12,6 +12,21 @@ Este flujo toma como referencia la [guía de instalación de Streamlabs](https:/
 
 También puedes descargar una pieza `.html` e importarla como antes. En OBS, usa su URL local desde el bot, no la URL del editor o la galería.
 
+## Probar una pieza y sus animaciones
+
+Desde **0.2.0 beta 13**, selecciona una pieza en **Overlays** para verla dentro del
+bot. Las escenas y marcos muestran su composición; los overlays dinámicos usan
+nombres y eventos ficticios. La vista previa también muestra los ajustes antes de
+guardarlos y funciona aunque el servidor de overlays esté desactivado.
+
+- Pulsa **Reproducir vista previa** para ver la entrada, el tiempo visible y la
+  salida cuando la pieza los tiene. **Ver salida** permite comprobarla sin esperar.
+- Para comprobar la pieza tal como se renderiza, guarda sus cambios, abre su URL
+  como fuente **Navegador** en OBS y pulsa **Probar en OBS**. La URL no cambia.
+- El panel no ejecuta HTML o JavaScript importado: los efectos personalizados de
+  archivos externos se prueban en el navegador o en OBS. La vista local reproduce
+  los controles de diseño compatibles de Streamer Linux Bot.
+
 ## Editar o eliminar piezas en el bot
 
 Desde **0.2.0 beta 12**, selecciona una pieza en **Overlays**. Puedes cambiar
