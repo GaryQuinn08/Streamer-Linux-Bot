@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .overlay_appearance import Appearance, load_appearance
 from .paths import BUILTIN_OVERLAYS, user_overlays_dir
 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
@@ -39,6 +40,7 @@ class OverlayInfo:
     version: str = ""
     author: str = ""
     params: list[dict[str, Any]] = field(default_factory=list)
+    appearance: Appearance | None = None
 
     @property
     def preview_path(self) -> Path | None:
@@ -109,6 +111,8 @@ def _load(folder: Path, source: str) -> OverlayInfo:
     data = _parse_manifest(folder)
     if data["id"] != folder.name:
         raise ValueError(f"El id '{data['id']}' no coincide con la carpeta '{folder.name}'")
+    params = list(data.get("params", []))
+    appearance = load_appearance(folder, data["name"]) if source == "user" and not params else None
     return OverlayInfo(
         id=data["id"],
         name=data["name"],
@@ -117,7 +121,8 @@ def _load(folder: Path, source: str) -> OverlayInfo:
         description=str(data.get("description", "")),
         version=str(data.get("version", "")),
         author=str(data.get("author", "")),
-        params=list(data.get("params", [])),
+        params=appearance.specs() if appearance else params,
+        appearance=appearance,
     )
 
 
@@ -127,7 +132,7 @@ def list_overlays() -> dict[str, OverlayInfo]:
     for root, source in ((BUILTIN_OVERLAYS, "builtin"), (user_overlays_dir(), "user")):
         if not root.is_dir():
             continue
-        for folder in sorted(p for p in root.iterdir() if p.is_dir()):
+        for folder in sorted(p for p in root.iterdir() if p.is_dir() and not p.is_symlink()):
             try:
                 info = _load(folder, source)
             except ValueError:
@@ -159,7 +164,8 @@ def validate_overlay_values(info: OverlayInfo, values: dict[str, str]) -> dict[s
             raise ValueError(f"Valor inválido: {key}")
         if kind == "select" and value not in {str(choice) for choice in spec["options"]}:
             raise ValueError(f"Opción inválida: {key}")
-        if len(value) > 500:
+        max_length = spec.get("maxLength", 500) if info.appearance else 500
+        if len(value) > max_length:
             raise ValueError(f"El valor de '{key}' es demasiado largo.")
         checked[key] = value
     return checked

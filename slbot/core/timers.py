@@ -51,6 +51,17 @@ def read_timers(settings: dict) -> list[Timer]:
     return list(result.values())
 
 
+def without_timers(settings: dict, ids: set[str]) -> dict:
+    """Remove only confirmed timer IDs, retaining other configuration entries."""
+    source = settings.get("timers")
+    if not ids or not isinstance(source, list):
+        return settings
+    return {**settings, "timers": [
+        item for item in source
+        if not (isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"].strip() in ids)
+    ]}
+
+
 class TimerService:
     def __init__(self, rt: Runtime):
         self.rt = rt

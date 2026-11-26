@@ -60,6 +60,7 @@ class LogBridge(QObject):
     gift_save_done = Signal(str)
     overlay_port_done = Signal(str)
     overlay_saved = Signal(str, str)
+    overlay_deleted = Signal(str, str)
     overlays_catalog_changed = Signal()
     rules_changed = Signal(str)
 
@@ -281,10 +282,13 @@ class HomeTab(QWidget):
 # --------------------------------------------------------------------------
 
 class TriggersTab(QWidget):
+    delete_done = Signal(str)
+
     def __init__(self, runtime: Runtime, bridge: LogBridge) -> None:
         super().__init__()
         self.rt = runtime
         self.bridge = bridge
+        self._editing = False
         layout = QVBoxLayout(self)
         editor = QGroupBox("Regla rápida: regalos de TikTok")
         form = QFormLayout(editor)
@@ -328,8 +332,18 @@ class TriggersTab(QWidget):
         self.table.setHorizontalHeaderLabels(["Nombre", "Plataforma", "Evento", "Filtros", "Cooldown (s)", "Acción", "Activo"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.verticalHeader().setVisible(False)
         layout.addWidget(self.table)
+        from .deletion import delete_shortcut
+        self.delete_button = QPushButton("Eliminar disparador seleccionado")
+        self.delete_button.setEnabled(False)
+        self.delete_button.clicked.connect(self._delete_trigger)
+        self.table.itemSelectionChanged.connect(self._update_delete_button)
+        delete_shortcut(self.table, self._delete_trigger)
+        layout.addWidget(self.delete_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.delete_done.connect(self._deleted)
         self.bridge.gift_save_done.connect(self._saved)
         self.bridge.rules_changed.connect(self._reload_quick_rule)
         self._refresh()
@@ -353,12 +367,52 @@ class TriggersTab(QWidget):
 
     def _refresh(self) -> None:
         triggers = self.rt.config.triggers
+        self.table.clearSelection()
+        self.save_button.setText("Guardar regla" if any(t.id == "tiktok-gift" for t in triggers)
+                                 else "Crear regla de regalos")
         self.table.setRowCount(len(triggers))
         for row, t in enumerate(triggers):
             values = [t.name, t.platform, t.event_type, json.dumps(t.filters, ensure_ascii=False),
                       str(t.cooldown_s), t.action_id, "sí" if t.enabled else "no"]
             for col, value in enumerate(values):
-                self.table.setItem(row, col, QTableWidgetItem(value))
+                item = QTableWidgetItem(value)
+                if col == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, t.id)
+                self.table.setItem(row, col, item)
+
+    def _delete_trigger(self) -> None:
+        from .deletion import confirm_delete
+        if not self.delete_button.isEnabled():
+            return
+        item = self.table.item(self.table.currentRow(), 0)
+        if item is None:
+            return
+        ident = item.data(Qt.ItemDataRole.UserRole)
+        if not confirm_delete(self, "Eliminar disparador", f"¿Eliminar el disparador «{item.text()}»?"):
+            return
+        self._editing = True
+        self.table.setEnabled(False)
+        self._update_delete_button()
+        self.save_button.setEnabled(False)
+        future = self.rt.submit(self.rt.edit_rule("trigger", {"id": ident}, delete=True))
+
+        def done(completed) -> None:
+            message = "Se canceló la operación." if completed.cancelled() else str(completed.exception() or "")
+            self.delete_done.emit(message)
+
+        future.add_done_callback(done)
+
+    def _deleted(self, error: str) -> None:
+        self._editing = False
+        self.table.setEnabled(True)
+        self.save_button.setEnabled(True)
+        if not error:
+            self.bridge.rules_changed.emit("trigger")
+        self._update_delete_button()
+        self.result.setText(f"No se pudo eliminar: {error}" if error else "Disparador eliminado.")
+
+    def _update_delete_button(self) -> None:
+        self.delete_button.setEnabled(not self._editing and bool(self.table.selectedItems()))
 
     def _refresh_targets(self, selected: str | None = None) -> None:
         selected = selected or self.destination.currentData()
@@ -375,10 +429,14 @@ class TriggersTab(QWidget):
             self.sound.setText(path)
 
     def _save_rule(self) -> None:
+        if self._editing:
+            return
         title, sound = self.title.text().strip(), self.sound.text().strip()
         if not title or (sound and not Path(sound).expanduser().is_file()):
             self.result.setText("Escribe un título y elige un archivo de sonido que exista (u omítelo).")
             return
+        self._editing = True
+        self._update_delete_button()
         self.save_button.setEnabled(False)
         future = self.rt.submit(self.rt.save_gift_rule(
             self.enabled_rule.isChecked(), self.gift_name.text().strip(),
@@ -389,6 +447,7 @@ class TriggersTab(QWidget):
 
         def done(completed) -> None:
             if completed.cancelled():
+                bridge.gift_save_done.emit("Se canceló la operación.")
                 return
             error = completed.exception()
             bridge.gift_save_done.emit(str(error) if error else "")
@@ -396,10 +455,12 @@ class TriggersTab(QWidget):
         future.add_done_callback(done)
 
     def _saved(self, error: str) -> None:
+        self._editing = False
         self.save_button.setEnabled(True)
         self.result.setText(f"No se pudo guardar: {error}" if error else "Regla guardada. Prueba el regalo desde Conexiones.")
         if not error:
             self._refresh()
+        self._update_delete_button()
 
 
 class _ColorButton(QPushButton):
@@ -431,6 +492,7 @@ class OverlaysTab(QWidget):
         self._info: OverlayInfo | None = None
         self._values: dict[str, str] = {}
         self._defaults: dict[str, str] = {}
+        self._deleting: str | None = None
 
         root = QHBoxLayout(self)
         left = QVBoxLayout()
@@ -453,6 +515,10 @@ class OverlaysTab(QWidget):
         import_theme = QPushButton("Importar tema (.slbpack)…")
         import_theme.clicked.connect(self._import_theme)
         left.addWidget(import_theme)
+        self.delete_btn = QPushButton("Eliminar overlay…")
+        self.delete_btn.clicked.connect(self._delete_overlay)
+        self.delete_btn.setEnabled(False)
+        left.addWidget(self.delete_btn)
         root.addLayout(left)
 
         right = QVBoxLayout()
@@ -497,13 +563,13 @@ class OverlaysTab(QWidget):
         right.addWidget(self.title)
         right.addWidget(self.desc)
         right.addWidget(self.preview)
-        right.addWidget(self.form_host)
         right.addLayout(edits)
         right.addWidget(self.status)
         right.addWidget(QLabel("URL del overlay:"))
         right.addWidget(self.url)
         right.addWidget(self.overlay_hint)
         right.addLayout(buttons)
+        right.addWidget(self.form_host)
         right.addStretch(1)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -514,6 +580,7 @@ class OverlaysTab(QWidget):
         root.addWidget(scroll, 1)
 
         self.bridge.overlay_saved.connect(self._preset_saved)
+        self.bridge.overlay_deleted.connect(self._overlay_deleted)
         self.bridge.overlay_port_done.connect(lambda _error: self._update_url())
         self.refresh()
 
@@ -574,6 +641,14 @@ class OverlaysTab(QWidget):
         self.status.clear()
         self.save_btn.setEnabled(bool(info.params))
         self.reset_btn.setEnabled(bool(info.params))
+        self.delete_btn.setEnabled(info.source == "user" and self._deleting is None)
+        self.delete_btn.setToolTip("Los overlays incluidos no se eliminan." if info.source == "builtin" else "")
+        kind = info.appearance.kind if info.appearance else None
+        self.preview_btn.setText({"chat": "Probar chat", "events": "Probar actividad"}.get(kind, "Probar alerta"))
+        if info.appearance:
+            self.desc.setText(info.description + "\nPersonaliza el diseño y guarda. Los cambios mantienen tu URL.")
+        elif not info.params and info.source == "user":
+            self.desc.setText(info.description + "\nEste HTML no incluye ajustes editables; se conserva sin modificar.")
         self._update_url()
 
     def _build_form(self, info: OverlayInfo) -> None:
@@ -641,11 +716,19 @@ class OverlaysTab(QWidget):
             return w
         if kind == "select":
             w = QComboBox()
-            w.addItems([str(o) for o in p.get("options", [])])
-            w.setCurrentText(str(default))
-            w.currentTextChanged.connect(setter)
+            appearance_options = {
+                "left": "Izquierda", "center": "Centro", "right": "Derecha", "none": "Ninguna",
+                "fade": "Desvanecer", "slide-up": "Deslizar arriba", "slide-left": "Deslizar a la izquierda",
+                "zoom": "Zoom", "pop": "Rebote",
+            } if self._info and self._info.appearance else {}
+            for option in map(str, p.get("options", [])):
+                w.addItem(appearance_options.get(option, option), option)
+            w.setCurrentIndex(w.findData(str(default)))
+            w.currentIndexChanged.connect(lambda _: setter(w.currentData()))
             return w
         w = QLineEdit(str(default))
+        if "maxLength" in p and self._info and self._info.appearance:
+            w.setMaxLength(p["maxLength"])
         w.textChanged.connect(setter)
         return w
 
@@ -654,8 +737,10 @@ class OverlaysTab(QWidget):
         ready = port is not None and self._info is not None
         self.url.setText(f"http://127.0.0.1:{port}/overlay/{self._info.id}/" if ready else "")
         self.url.setPlaceholderText("Asigna un puerto desde Inicio para generar la URL.")
-        for button in (self.copy_btn, self.open_btn, self.preview_btn):
+        for button in (self.copy_btn, self.open_btn):
             button.setEnabled(ready)
+        kind = self._info.appearance.kind if self._info and self._info.appearance else None
+        self.preview_btn.setEnabled(ready and (kind is None or kind in {"alert", "chat", "events"}))
 
     def _copy_url(self) -> None:
         if self.url.text():
@@ -706,6 +791,45 @@ class OverlaysTab(QWidget):
             self.status.setText("Apariencia guardada. La fuente abierta se actualiza sin cambiar la URL.")
         else:
             self.status.setText("Apariencia guardada. Actualiza la fuente de OBS; la URL no cambia.")
+
+    def _delete_overlay(self) -> None:
+        info = self._info
+        if info is None or info.source != "user" or self._deleting:
+            return
+        uses = self.rt.overlay_use_count(info.id)
+        detail = f"Se quitarán {uses} paso(s) de acción que usan ese overlay. " if uses else ""
+        confirm = QMessageBox(self)
+        confirm.setIcon(QMessageBox.Warning)
+        confirm.setWindowTitle("Eliminar overlay")
+        confirm.setTextFormat(Qt.PlainText)
+        confirm.setText(f"¿Eliminar «{info.name}» del bot?")
+        confirm.setInformativeText(detail + "La URL dejará de funcionar. No se eliminarán fuentes ni escenas de OBS.")
+        confirm.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        confirm.setDefaultButton(QMessageBox.No)
+        if confirm.exec() != QMessageBox.Yes:
+            return
+        self._deleting = info.id
+        self.delete_btn.setEnabled(False)
+        future = self.rt.submit(self.rt.delete_user_overlay(info.id, uses))
+        signal = self.bridge.overlay_deleted
+
+        def done(completed) -> None:
+            error = completed.exception() if not completed.cancelled() else RuntimeError("Operación cancelada.")
+            signal.emit(info.id, str(error) if error else "")
+
+        future.add_done_callback(done)
+
+    def _overlay_deleted(self, overlay_id: str, error: str) -> None:
+        self._deleting = None
+        current = self._info.id if self._info else None
+        if error:
+            self.delete_btn.setEnabled(self._info is not None and self._info.source == "user")
+            QMessageBox.warning(self, "Eliminar overlay", error)
+            return
+        self.refresh(select_id=current if current != overlay_id else None)
+        self.bridge.overlays_catalog_changed.emit()
+        self.bridge.rules_changed.emit("action")
+        self.status.setText("Overlay eliminado. Sus archivos externos y las fuentes de OBS no cambiaron.")
 
     def _create_alert(self) -> None:
         name, accepted = QInputDialog.getText(self, "Nueva alerta", "Nombre de la alerta:")

@@ -5,7 +5,7 @@ import copy
 from uuid import uuid4
 
 from .config import Action, Config, Trigger
-from .timers import read_timers
+from .timers import read_timers, without_timers
 
 # key, label, type, default. Requests use only the action types listed here.
 STEP_FIELDS = {
@@ -24,6 +24,11 @@ STEP_FIELDS = {
 }
 
 
+def action_references(config: Config, action_id: str):
+    return ([item for item in config.triggers if item.action_id == action_id],
+            [item for item in read_timers(config.settings) if item.action_id == action_id])
+
+
 def update_rules(config: Config, kind: str, data: dict, *, delete: bool = False) -> None:
     """Guarda antes de publicar el nuevo estado; la ruta y los ajustes no se cambian."""
     name = str(data.get("name", "")).strip()
@@ -32,16 +37,23 @@ def update_rules(config: Config, kind: str, data: dict, *, delete: bool = False)
         raise ValueError("Escribe un nombre.")
     actions = copy.deepcopy(config.actions)
     triggers = copy.deepcopy(config.triggers)
+    settings = config.settings
     if kind == "action":
         if delete:
-            refs = [t.name for t in triggers if t.action_id == ident]
-            refs += [t.name for t in read_timers(config.settings) if t.action_id == ident]
-            if refs:
-                raise ValueError("La acción todavía se utiliza en: " + ", ".join(refs))
+            trigger_refs, timer_refs = action_references(config, ident)
+            expected = {"triggers": sorted({t.id for t in trigger_refs}), "timers": sorted({t.id for t in timer_refs})}
+            confirmation = data.get("confirmed_dependencies")
+            if confirmation is not None and confirmation != expected:
+                raise ValueError("Los disparadores o temporizadores vinculados cambiaron. Vuelve a confirmar la eliminación.")
+            if (trigger_refs or timer_refs) and confirmation is None:
+                raise ValueError("La acción todavía se utiliza en: " + ", ".join(t.name for t in [*trigger_refs, *timer_refs]))
+            if trigger_refs:
+                triggers = [t for t in triggers if t.action_id != ident]
+            settings = without_timers(settings, set(expected["timers"]))
             actions = [a for a in actions if a.id != ident]
         else:
             action = Action.from_dict({**data, "id": ident, "name": name})
-            if not action.steps:
+            if not action.steps and not any(a.id == ident for a in actions):
                 raise ValueError("Agrega al menos un paso.")
             actions = _upsert(actions, action)
     elif kind == "trigger":
@@ -54,8 +66,8 @@ def update_rules(config: Config, kind: str, data: dict, *, delete: bool = False)
             triggers = _upsert(triggers, trigger)
     else:
         raise ValueError("Tipo de regla inválido.")
-    Config(settings=config.settings, actions=actions, triggers=triggers, path=config.path).save()
-    config.actions, config.triggers = actions, triggers
+    Config(settings=settings, actions=actions, triggers=triggers, path=config.path).save()
+    config.actions, config.triggers, config.settings = actions, triggers, settings
 
 
 def _upsert(items: list, replacement) -> list:

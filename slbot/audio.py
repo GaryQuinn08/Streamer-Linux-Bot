@@ -9,6 +9,7 @@ import socket
 import shutil
 import tempfile
 from dataclasses import dataclass
+from itertools import count
 from pathlib import Path
 
 import aiohttp
@@ -164,7 +165,9 @@ async def run_process(*argv: str, text: str | None = None, timeout: float = 7200
 class MusicQueue:
     def __init__(self, rt):
         self.rt = rt
-        self.items: asyncio.Queue[Path | HostedAudio] = asyncio.Queue(maxsize=50)
+        self.items: asyncio.Queue[tuple[int, Path | HostedAudio]] = asyncio.Queue(maxsize=50)
+        self._ids = count()
+        self._pending: tuple[tuple[int, str], ...] = ()
         self.worker: asyncio.Task | None = None
         self.current = ""
         self.last_error = ""
@@ -185,14 +188,17 @@ class MusicQueue:
             raise RuntimeError("Instala mpv para usar la cola.")
         if self.items.full():
             raise ValueError("La cola ya tiene 50 canciones pendientes.")
-        self.items.put_nowait(track)
+        ident = next(self._ids)
+        self.items.put_nowait((ident, track))
+        self._pending += ((ident, track.name),)
         self.rt.log(f"Música: en cola «{track.name}».")
         if self.worker is None or self.worker.done():
             self.worker = self.rt.spawn(self._play(mpv))
 
     async def _play(self, mpv):
         while not self.items.empty():
-            track = self.items.get_nowait()
+            ident, track = self.items.get_nowait()
+            self._pending = tuple(item for item in self._pending if item[0] != ident)
             self.current = track.name
             self.last_error = ""
             error = ""
@@ -223,10 +229,25 @@ class MusicQueue:
                     self.current = ""
                 self.items.task_done()
 
+    def pending(self) -> tuple[tuple[int, str], ...]:
+        return self._pending
+
+    async def remove(self, ident: int) -> None:
+        if not any(item[0] == ident for item in self._pending):
+            raise ValueError("El audio ya no está pendiente. Para detener la reproducción, usa Detener y vaciar.")
+        items = [self.items.get_nowait() for _ in range(self.items.qsize())]
+        for item in items:
+            if item[0] != ident:
+                self.items.put_nowait(item)
+        for _ in items:
+            self.items.task_done()
+        self._pending = tuple(item for item in self._pending if item[0] != ident)
+
     async def clear(self) -> None:
         while not self.items.empty():
             self.items.get_nowait()
             self.items.task_done()
+        self._pending = ()
         worker, self.worker = self.worker, None
         self.last_error = ""
         self.current = ""

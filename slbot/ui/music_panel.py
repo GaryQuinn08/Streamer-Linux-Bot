@@ -9,10 +9,11 @@ from PySide6.QtCore import Qt, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QVBoxLayout, QWidget,
+    QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget,
 )
 
 from ..connectors.oauth import deployment_setting
+from .deletion import confirm_delete, delete_shortcut
 
 
 class MusicPanel(QWidget):
@@ -24,6 +25,7 @@ class MusicPanel(QWidget):
         self.rt = rt
         self.spotify = rt.connectors["spotify"]
         self._pending = False
+        self._queue_rows = ()
         self.open_requested.connect(self._open_in_desktop, Qt.ConnectionType.QueuedConnection)
         self.operation_done.connect(self._complete)
         outer = QVBoxLayout(self)
@@ -87,10 +89,19 @@ class MusicPanel(QWidget):
         self.local_button = QPushButton("Agregar archivo local…")
         self.local_button.clicked.connect(self._add_file)
         self.clear_button = QPushButton("Detener y vaciar esta cola")
-        self.clear_button.clicked.connect(lambda: self._operate(self.rt.music.clear(), "Cola de audio vacía."))
+        self.clear_button.clicked.connect(self._clear)
         row.addWidget(self.local_button)
         row.addWidget(self.clear_button)
         block.addLayout(row)
+        self.pending_list = QListWidget()
+        self.pending_list.setAccessibleName("Audio pendiente en la cola del bot")
+        self.pending_list.setMaximumHeight(100)
+        self.pending_list.itemSelectionChanged.connect(self._queue_buttons)
+        delete_shortcut(self.pending_list, self._remove_pending)
+        block.addWidget(self.pending_list)
+        self.remove_button = QPushButton("Quitar seleccionado de la cola")
+        self.remove_button.clicked.connect(self._remove_pending)
+        block.addWidget(self.remove_button, alignment=Qt.AlignmentFlag.AlignLeft)
         self.local_status = QLabel()
         self.local_status.setTextFormat(Qt.TextFormat.PlainText)
         self.local_status.setWordWrap(True)
@@ -115,12 +126,42 @@ class MusicPanel(QWidget):
         self.spotify_url.setEnabled(permitted and self.spotify.connected)
         self.url_button.setEnabled(self.licensed.isChecked() and not self._pending)
         self.local_button.setEnabled(self.licensed.isChecked() and not self._pending)
-        self.clear_button.setEnabled(not self._pending)
         self.spotify_status.setText(self.spotify.status)
         current = self.rt.music.current or "Sin reproducción activa"
-        pending = self.rt.music.items.qsize()
+        rows = self.rt.music.pending()
+        if rows != self._queue_rows:
+            selected = self.pending_list.currentItem()
+            selected_id = selected.data(Qt.ItemDataRole.UserRole) if selected else None
+            self.pending_list.clear()
+            for ident, name in rows:
+                item = QListWidgetItem(name)
+                item.setData(Qt.ItemDataRole.UserRole, ident)
+                self.pending_list.addItem(item)
+                if ident == selected_id:
+                    self.pending_list.setCurrentItem(item)
+            self._queue_rows = rows
+        self._queue_buttons()
         error = self.rt.music.last_error
-        self.local_status.setText(f"{current} · {pending} en cola" + (f" · {error}" if error else ""))
+        self.local_status.setText(f"{current} · {len(rows)} en cola" + (f" · {error}" if error else ""))
+
+    def _queue_buttons(self):
+        self.remove_button.setEnabled(not self._pending and self.pending_list.currentItem() is not None
+                                      and bool(self.pending_list.selectedItems()))
+        self.clear_button.setEnabled(not self._pending and bool(self._queue_rows or self.rt.music.current))
+
+    def _remove_pending(self):
+        item = self.pending_list.currentItem()
+        if not item or not self.remove_button.isEnabled():
+            return
+        ident = item.data(Qt.ItemDataRole.UserRole)
+        if confirm_delete(self, "Quitar audio de la cola", f"¿Quitar «{item.text()}» de la cola? No se borrará el archivo."):
+            self._operate(self.rt.music.remove(ident), "Audio quitado de la cola.")
+
+    def _clear(self):
+        if self.clear_button.isEnabled() and confirm_delete(
+                self, "Detener y vaciar la cola",
+                "¿Detener la reproducción y quitar todos los audios pendientes? No se borrarán archivos."):
+            self._operate(self.rt.music.clear(), "Cola de audio vacía.")
 
     def _private_changed(self, checked):
         if not checked:

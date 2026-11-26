@@ -12,11 +12,14 @@ import asyncio
 import copy
 import errno
 import logging
+import shutil
+import tempfile
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass, replace
 from itertools import count
+from pathlib import Path
 from typing import Any, Callable, Coroutine
 
 from .audio import MusicQueue
@@ -32,9 +35,10 @@ from .core.config import Config, DEFAULT_ACTIONS, DEFAULT_TRIGGERS, Action, Trig
 from .core.engine import Engine
 from .core.editing import update_rules
 from .core.events import Event, EventBus
-from .core.timers import Timer, TimerService, read_timers
+from .core.timers import Timer, TimerService, read_timers, without_timers
 from .overlay_manager import find_overlay, validate_overlay_values
 from .overlay_server import CHAT_PLATFORMS, OverlayServer
+from .paths import user_overlays_dir
 
 log = logging.getLogger("slb.runtime")
 
@@ -177,17 +181,20 @@ class Runtime:
         update_rules(self.config, kind, data, delete=delete)
 
     async def edit_timer(self, data: dict, *, delete: bool = False) -> None:
-        existing = {item.id: item for item in read_timers(self.config.settings)}
         if delete:
-            existing.pop(data.get("id"), None)
+            ident = data.get("id")
+            if not isinstance(ident, str) or not ident:
+                raise ValueError("Selecciona un temporizador.")
+            settings = without_timers(self.config.settings, {ident})
         else:
+            existing = {item.id: item for item in read_timers(self.config.settings)}
             timer = Timer.parse(data)
             if self.config.action_by_id(timer.action_id) is None:
                 raise ValueError("Elige una acción existente.")
             if timer.id not in existing and len(existing) >= 100:
                 raise ValueError("El perfil admite hasta 100 temporizadores.")
             existing[timer.id] = timer
-        settings = {**self.config.settings, "timers": [item.to_dict() for item in existing.values()]}
+            settings = {**self.config.settings, "timers": [item.to_dict() for item in existing.values()]}
         Config(settings=settings, triggers=self.config.triggers, actions=self.config.actions,
                path=self.config.path).save()
         self.config.settings = settings
@@ -285,19 +292,60 @@ class Runtime:
         if overlay_id == "multi-chat":
             await self.overlays.broadcast(overlay_id, {"channel": "chat-settings", "values": checked})
 
+    def overlay_use_count(self, overlay_id: str) -> int:
+        return sum(step.get("type") == "overlay_alert" and step.get("overlay") == overlay_id
+                   for action in self.config.actions for step in action.steps)
+
+    async def delete_user_overlay(self, overlay_id: str, confirmed_uses: int) -> None:
+        info = find_overlay(overlay_id)
+        root = user_overlays_dir().resolve()
+        candidate = root / overlay_id
+        if info is None or info.source != "user" or candidate.is_symlink() or info.path != candidate:
+            raise ValueError("Solo puedes eliminar un overlay propio o importado.")
+        if self.overlay_use_count(overlay_id) != confirmed_uses:
+            raise ValueError("Cambió el número de acciones que lo usan. Confirma de nuevo.")
+        raw = self.config.settings.get("overlay_presets", {})
+        presets = dict(raw) if isinstance(raw, dict) else {}
+        presets.pop(overlay_id, None)
+        settings = {**self.config.settings, "overlay_presets": presets}
+        actions = []
+        for action in self.config.actions:
+            steps = [step for step in action.steps
+                     if not (step.get("type") == "overlay_alert" and step.get("overlay") == overlay_id)]
+            actions.append(replace(action, steps=steps))
+        stage = Path(tempfile.mkdtemp(prefix=".slb-delete-", dir=root))
+        removed = stage / "overlay"
+        try:
+            candidate.rename(removed)
+            try:
+                Config(settings=settings, triggers=self.config.triggers, actions=actions, path=self.config.path).save()
+            except BaseException:
+                removed.rename(candidate)
+                raise
+            self.config.settings, self.config.actions = settings, actions
+        finally:
+            # Never destroy the staged overlay if a failed save could not be reversed.
+            if candidate.exists() or self.config.settings is settings or not removed.exists():
+                shutil.rmtree(stage, ignore_errors=True)
+        await asyncio.gather(*(ws.close(drain=False) for ws, oid in list(self.overlays.clients.items())
+                               if oid == overlay_id), return_exceptions=True)
+        self.log(f"Overlay eliminado: {info.name} ({overlay_id})")
+
     async def preview_overlay(self, overlay_id: str) -> None:
         if self.port is None:
             raise ValueError("Asigna un puerto de overlays primero.")
-        if find_overlay(overlay_id) is None:
+        info = find_overlay(overlay_id)
+        if info is None:
             raise ValueError("Ese overlay ya no existe.")
+        kind = info.appearance.kind if info.appearance else None
         if overlay_id == "live-goal":
             await self.overlays.broadcast(overlay_id, {
                 "channel": "goal-preview", "counts": {"gift": 3, "follow": 1},
             })
-        elif overlay_id == "event-feed":
+        elif overlay_id == "event-feed" or kind == "events":
             await self.overlays.forward_event(Event("tiktok", "gift", "viewer_demo",
                                                     {"gift_name": "Rose", "count": 3}))
-        elif overlay_id == "multi-chat":
+        elif overlay_id == "multi-chat" or kind == "chat":
             for platform in CHAT_PLATFORMS:
                 await self.overlays.forward_chat(Event(platform, "chat", "viewer_demo", {
                     "text": "Así se verá el chat en tu transmisión.", "simulated": True,

@@ -197,10 +197,10 @@ def render_piece(kind: str, c: dict) -> str:
 def import_pack(source: Path) -> list[OverlayInfo]:
     """Install each source into its own catalog entry, never replacing existing overlays."""
     name, desc, pieces=read_pack(Path(source))
-    rendered=[(kind,render_piece(kind,piece)) for kind,piece in pieces]
+    rendered=[(kind,piece,render_piece(kind,piece)) for kind,piece in pieces]
     added: list[OverlayInfo]=[]
     try:
-        for kind, content in rendered:
+        for kind, piece, content in rendered:
             title=name[:55]+" · "+LABELS[kind]
             with tempfile.TemporaryDirectory(prefix="slb-theme-") as staging:
                 path=Path(staging)
@@ -208,6 +208,8 @@ def import_pack(source: Path) -> list[OverlayInfo]:
                           "params":[],"version":"1"}
                 (path/"manifest.json").write_text(json.dumps(manifest,ensure_ascii=False),encoding="utf-8")
                 (path/"index.html").write_text(content,encoding="utf-8")
+                (path/"slb-appearance.json").write_text(
+                    json.dumps({"kind": kind, "design": piece}, ensure_ascii=True), encoding="utf-8")
                 added.append(import_overlay(path))
     except (OSError, ValueError):
         for info in reversed(added):

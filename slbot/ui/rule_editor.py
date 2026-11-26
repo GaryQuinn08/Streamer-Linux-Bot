@@ -15,8 +15,25 @@ from PySide6.QtWidgets import (
 
 from ..connectors.simulator import sample_event
 from ..core.config import Action
-from ..core.editing import STEP_FIELDS
+from ..core.editing import STEP_FIELDS, action_references
 from ..overlay_manager import list_overlays
+from .deletion import confirm_delete, delete_shortcut
+
+
+def confirm_action_deletion(parent, config, item):
+    triggers, timers = action_references(config, item.id)
+    message = f"¿Eliminar la acción «{item.name}»?"
+    for label, refs in (("Disparadores", triggers), ("Temporizadores", timers)):
+        if refs:
+            names = ", ".join(t.name[:70] for t in refs[:4])
+            if len(refs) > 4:
+                names += f" y {len(refs) - 4} más"
+            message += f"\n\n{label} vinculados que también se eliminarán ({len(refs)}): {names}."
+    if not confirm_delete(parent, "Eliminar acción", message):
+        return None
+    return {"id": item.id, "confirmed_dependencies": {
+        "triggers": sorted({t.id for t in triggers}), "timers": sorted({t.id for t in timers}),
+    }}
 
 
 def buttons(layout, pairs):
@@ -193,6 +210,7 @@ class ActionForm(Form):
         self.outer.addWidget(self.list)
         self.list.itemDoubleClicked.connect(lambda _item: self.edit())
         buttons(self.outer, [("Agregar paso", lambda: self.edit(True)), ("Editar", lambda: self.edit()), ("Quitar", self.remove)])
+        delete_shortcut(self.list, self.remove)
         buttons(self.outer, [("Subir", lambda: self.move(-1)), ("Bajar", lambda: self.move(1))])
         self.refresh()
         self.finish()
@@ -249,6 +267,7 @@ class RulesPanel(QWidget):
         self.list = QListWidget()
         layout.addWidget(self.list)
         self.list.itemDoubleClicked.connect(lambda _item: self.edit())
+        delete_shortcut(self.list, self.delete)
         pairs = [("Nuevo", lambda: self.edit(True)), ("Editar", lambda: self.edit()), ("Eliminar", self.delete)]
         if kind == "action" and not rt.editor_only:
             pairs.append(("Ejecutar con regalo de prueba", self.test_action))
@@ -298,8 +317,12 @@ class RulesPanel(QWidget):
 
     def delete(self):
         item = self.selected()
-        if item and QMessageBox.question(self, "Eliminar", f"¿Eliminar «{item.name}»?") == QMessageBox.Yes:
-            self.send(self.rt.edit_rule(self.kind, {"id": item.id}, delete=True))
+        if not item:
+            return
+        data = (confirm_action_deletion(self, self.rt.config, item) if self.kind == "action" else
+                {"id": item.id} if confirm_delete(self, "Eliminar disparador", f"¿Eliminar «{item.name}»?") else None)
+        if data:
+            self.send(self.rt.edit_rule(self.kind, data, delete=True))
 
     def test_action(self):
         action = self.selected()
@@ -345,6 +368,7 @@ class ActionWorkspace(QWidget):
         action_toolbar = [("+ Acción", lambda: self.edit_action(True)),
                           ("Editar", self.edit_action), ("Eliminar", self.delete_action)]
         self.action_tools = self._toolbar(action_layout, self.action_table, action_toolbar)
+        delete_shortcut(self.action_table, self.delete_action)
         if not rt.editor_only:
             self.test_button = QPushButton("Ejecutar con regalo de prueba")
             self.test_button.clicked.connect(self.test_action)
@@ -362,6 +386,7 @@ class ActionWorkspace(QWidget):
         self.trigger_tools = self._toolbar(trigger_layout, self.trigger_table,
             [("+ Disparador", lambda: self.edit_trigger(True)),
              ("Editar", self.edit_trigger), ("Eliminar", self.delete_trigger)])
+        delete_shortcut(self.trigger_table, self.delete_trigger)
         right.addWidget(trigger_panel)
 
         step_panel, step_layout, self.step_count = self._panel("Subacciones")
@@ -373,6 +398,7 @@ class ActionWorkspace(QWidget):
             [("+ Subacción", lambda: self.edit_step(True)), ("Editar", self.edit_step),
              ("Eliminar", self.delete_step), ("Subir", lambda: self.move_step(-1)),
              ("Bajar", lambda: self.move_step(1))])
+        delete_shortcut(self.step_table, self.delete_step)
         for button, arrow in zip(self.step_tools[-2:], ("↑", "↓")):
             label = button.text()
             button.setAccessibleName(label)
@@ -550,8 +576,10 @@ class ActionWorkspace(QWidget):
         self._send(self.rt.edit_rule("action", dialog.result_data), "action")
 
     def delete_action(self):
-        if self.action and self._confirm(f"¿Eliminar la acción «{self.action.name}»?"):
-            self._send(self.rt.edit_rule("action", {"id": self.action.id}, delete=True), "action")
+        if self.action:
+            data = confirm_action_deletion(self, self.rt.config, self.action)
+            if data:
+                self._send(self.rt.edit_rule("action", data, delete=True), "action")
 
     def edit_trigger(self, new=False):
         if not self.action:
@@ -569,7 +597,7 @@ class ActionWorkspace(QWidget):
         row = self.trigger_table.currentRow()
         if self.trigger_table.selectedItems() and 0 <= row < len(self.triggers):
             item = self.triggers[row]
-            if self._confirm(f"¿Eliminar el disparador «{item.name}»?"):
+            if confirm_delete(self, "Eliminar disparador", f"¿Eliminar el disparador «{item.name}»?"):
                 self._trigger_selection = row
                 self._send(self.rt.edit_rule("trigger", {"id": item.id}, delete=True), "trigger")
 
@@ -591,9 +619,10 @@ class ActionWorkspace(QWidget):
     def delete_step(self):
         row = self.step_table.currentRow()
         if self.action and self.step_table.selectedItems() and 0 <= row < len(self.action.steps):
+            message = "¿Eliminar esta subacción?"
             if len(self.action.steps) == 1:
-                self.notice.setText("Agrega otra subacción antes de quitar la última.")
-            elif self._confirm("¿Eliminar esta subacción?"):
+                message += "\n\nLa acción quedará vacía y no ejecutará nada hasta que agregues otra subacción."
+            if confirm_delete(self, "Eliminar subacción", message):
                 steps = list(self.action.steps)
                 steps.pop(row)
                 self._save_steps(steps, row)

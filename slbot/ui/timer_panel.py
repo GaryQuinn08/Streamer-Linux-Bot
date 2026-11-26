@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.timers import Timer, read_timers
+from .deletion import confirm_delete, delete_shortcut
 from .rule_editor import ActionWorkspace
 
 
@@ -77,6 +78,7 @@ class TimerPanel(QWidget):
         layout.addLayout(row)
         self.table = ActionWorkspace._table(("Temporizador", "Acción", "Intervalo", "Estado"), "timers", stretch=1)
         self.table.itemSelectionChanged.connect(self._buttons)
+        delete_shortcut(self.table, self._delete)
         layout.addWidget(self.table)
         self.status = QLabel("El primer ciclo se ejecuta tras el intervalo. Desactivar no interrumpe una acción en curso.")
         self.status.setTextFormat(Qt.TextFormat.PlainText)
@@ -119,7 +121,9 @@ class TimerPanel(QWidget):
 
     def _delete(self):
         timer = self._selected()
-        if timer and QMessageBox.question(self, "Eliminar temporizador", "¿Eliminar el temporizador seleccionado?") == QMessageBox.StandardButton.Yes:
+        if not self.pending and timer and confirm_delete(
+                self, "Eliminar temporizador", f"¿Eliminar el temporizador «{timer.name}»?\n\n"
+                "No volverá a dispararse. Una acción que ya está en curso puede terminar."):
             self._save({"id": timer.id}, delete=True)
 
     def _save(self, data, *, delete=False):

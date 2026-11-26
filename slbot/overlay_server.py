@@ -17,7 +17,7 @@ from urllib.parse import quote, urlsplit
 from aiohttp import web
 
 from .core.events import Event
-from .overlay_manager import find_overlay, list_overlays
+from .overlay_manager import find_overlay, list_overlays, validate_overlay_values
 from .paths import SDK_DIR
 
 if TYPE_CHECKING:
@@ -190,4 +190,17 @@ class OverlayServer:
         target = (info.path / rel).resolve()
         if not target.is_relative_to(info.path) or not target.is_file():
             raise web.HTTPNotFound()
+        if rel == "index.html" and info.appearance:
+            raw = self.rt.config.settings.get("overlay_presets", {})
+            saved = raw.get(info.id, {}) if isinstance(raw, dict) else {}
+            if isinstance(saved, dict) and saved:
+                checked = {}
+                for key, value in saved.items():
+                    try:
+                        checked.update(validate_overlay_values(info, {key: value}))
+                    except (ValueError, TypeError):
+                        continue
+                if checked:
+                    body = info.appearance.render(info.path, checked)
+                    return web.Response(text=body, content_type="text/html", headers=NO_STORE)
         return web.FileResponse(target, headers=NO_STORE)
