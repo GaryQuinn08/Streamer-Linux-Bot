@@ -76,3 +76,11 @@ select public.review_overlay_submission('UUID-DEL-APORTE'::uuid, false);
 Eliminar una cuenta en Supabase borra sus propuestas, publicaciones y
 votos asociados; las copias que otras personas ya descargaron no se
 retiran.
+
+## Perfiles y temas
+
+Tras instalar las migraciones anteriores, aplica una sola vez
+[`202611260610_overlay_profiles_packs.sql`](../supabase/migrations/202611260610_overlay_profiles_packs.sql).
+Se puede guardar el perfil antes de publicar. Activar el modo editor es voluntario
+y no concede permisos de moderación. Solo el dueño ve el perfil; al publicar se usa
+su alias como crédito. Consulta [Temas y paquetes](TEMAS.md) para el flujo de archivos.

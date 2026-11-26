@@ -6,7 +6,7 @@
     /^sb_publishable_[A-Za-z0-9_-]{20,160}$/.test(setup.publishableKey || "");
   const sdk = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/dist/umd/supabase.js";
   const sdkIntegrity = "sha384-A97u3Qnt9GZHURO9YJZRe7VQgGUeFzcv6I1oIGnUTxQrCxnpQMwR0/G8F2zt9abZ";
-  const validKey = /^(?:gallery:[a-z0-9][a-z0-9-]{0,63}|community:[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})$/;
+  const validKey = /^(?:(?:gallery|theme):[a-z0-9][a-z0-9-]{0,63}|(?:community|pack):[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})$/;
   const number = new Intl.NumberFormat("es-MX");
   const decimal = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const licenses = new Map([

@@ -5,14 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="Descubre diseños de alertas, chat y actividad; elige uno y personalízalo en Streamer Linux Bot.">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://tgvjkjxsaaatejkcwuxh.supabase.co; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; frame-src blob:; connect-src 'self' https://tgvjkjxsaaatejkcwuxh.supabase.co; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Galería de overlays · Streamer Linux Bot</title>
   <link rel="stylesheet" href="gallery.css">
+  <link rel="stylesheet" href="themes.css?v=slbpack-v1">
   <link rel="stylesheet" href="../catalog-social.css?v=catalog-social-1">
   <script src="../editor/engine.js?v=editor-visual-1" defer></script>
+  <script src="../overlay-pack.js?v=slbpack-v1" defer></script>
   <script src="../comunidad/config.js?v=supabase-1" defer></script>
   <script src="../catalog-social.js?v=catalog-social-2" defer></script>
   <script src="gallery.js?v=catalog-social-2" defer></script>
+  <script src="themes.js?v=slbpack-v1" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#explorar">Saltar a los diseños</a>
@@ -31,13 +34,71 @@
       <div class="hero-copy">
         <p class="eyebrow"><i aria-hidden="true"></i> CREATIVIDAD PARA TU DIRECTO</p>
         <h1 id="gallery-title">Galería de overlays</h1>
-        <p id="gallery-description">Encuentra un diseño para tu stream, dale tu toque en el editor o descarga el HTML listo para importar.</p>
+        <p id="gallery-description">20 temas originales listos para tu directo, además de alertas, chat y otros diseños que puedes editar por separado.</p>
         <a href="./" id="leave-creator" hidden>← Todos los creadores</a>
       </div>
       <a href="../editor/" class="button secondary">Crear desde cero</a>
     </header>
 
-    <section class="explore" aria-label="Buscar y filtrar diseños">
+    <nav id="section-links" class="section-links" aria-label="Colecciones">
+      <a href="#temas" class="button secondary">Temas completos</a>
+      <a href="#disenos-sueltas" class="button secondary">Diseños individuales</a>
+      <a href="../packs/" class="button primary">Crear mi pack</a>
+    </nav>
+
+    <section class="themes" id="temas" aria-labelledby="themes-title">
+      <div class="theme-heading">
+        <div>
+          <p class="eyebrow">COLECCIÓN ORIGINAL / 01</p>
+          <h2 id="themes-title">Temas completos</h2>
+          <p class="theme-intro">Descarga un <code>.slbpack</code> con alerta, multichat, actividad, banner, marco de cámara y pantallas de inicio, pausa y cierre. También puedes descargar solo la pieza que necesites.</p>
+        </div>
+        <a href="../packs/" class="button secondary">Crear o editar un pack</a>
+      </div>
+      <div class="toolbar">
+        <label class="search theme-search" for="theme-search">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.7" cy="10.7" r="5.6"/><path d="m15 15 4 4"/></svg>
+          <span class="sr-only">Buscar temas</span>
+          <input id="theme-search" type="search" maxlength="120" autocomplete="off" placeholder="Busca un tema, ambiente o color">
+        </label>
+        <div class="chips" aria-label="Estilos de tema">
+          <button type="button" class="chip" data-theme-filter="all" aria-pressed="true">Todos</button>
+          <button type="button" class="chip" data-theme-filter="Luminosos" aria-pressed="false">Luminosos</button>
+          <button type="button" class="chip" data-theme-filter="Naturales" aria-pressed="false">Naturales</button>
+          <button type="button" class="chip" data-theme-filter="Retro" aria-pressed="false">Retro</button>
+          <button type="button" class="chip" data-theme-filter="Tecnológicos" aria-pressed="false">Tecnológicos</button>
+        </div>
+      </div>
+      <p id="theme-count" class="theme-count" role="status">Cargando temas…</p>
+      <p id="theme-notice" class="sr-only" role="status"></p>
+      <div id="theme-grid" class="theme-grid" aria-busy="true"></div>
+      <p id="theme-empty" class="theme-empty" hidden>No encontramos temas con esos filtros.</p>
+    </section>
+    <dialog id="theme-dialog" class="theme-dialog" aria-labelledby="theme-dialog-title">
+      <div class="theme-heading">
+        <div>
+          <p class="eyebrow">CONTENIDO DEL PACK</p>
+          <h2 id="theme-dialog-title"></h2>
+          <p id="theme-dialog-description" class="theme-intro"></p>
+        </div>
+        <button id="theme-close" class="button secondary" type="button" autofocus>Cerrar</button>
+      </div>
+      <div class="theme-inspect">
+        <div class="theme-inspect-visual">
+          <h3 id="theme-dialog-piece-name"></h3>
+          <iframe id="theme-preview" title="Vista previa de la pieza seleccionada" sandbox="" referrerpolicy="no-referrer"></iframe>
+          <p class="meta">Las piezas dinámicas muestran datos de ejemplo. La posición y el tamaño final dependen de tu fuente en OBS.</p>
+        </div>
+        <ul id="theme-pieces" aria-label="Piezas del pack"></ul>
+      </div>
+      <div class="theme-buttons">
+        <button id="theme-dialog-download" class="button primary" type="button">Descargar pack completo</button>
+      </div>
+      <p id="theme-dialog-notice" class="theme-count" role="status"></p>
+    </dialog>
+
+    <section class="explore" id="disenos-sueltas" aria-label="Buscar y filtrar diseños">
+      <h2 class="individual-heading">Diseños individuales</h2>
       <div class="toolbar">
         <label class="search" for="search">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.7" cy="10.7" r="5.6"/><path d="m15 15 4 4"/></svg>

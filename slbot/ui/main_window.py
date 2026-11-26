@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..connectors.simulator import SAMPLE_KINDS, sample_event
+from ..overlay_pack import import_pack
 from ..overlay_manager import OverlayInfo, create_alert, import_overlay, list_overlays, validate_overlay_values
 from ..runtime import Runtime
 from .rule_editor import ActionWorkspace, RulesPanel
@@ -449,6 +450,9 @@ class OverlaysTab(QWidget):
         import_html = QPushButton("Importar HTML…")
         import_html.clicked.connect(self._import_html)
         left.addWidget(import_html)
+        import_theme = QPushButton("Importar tema (.slbpack)…")
+        import_theme.clicked.connect(self._import_theme)
+        left.addWidget(import_theme)
         root.addLayout(left)
 
         right = QVBoxLayout()
@@ -715,6 +719,20 @@ class OverlaysTab(QWidget):
         self.refresh(select_id=info.id)
         self.bridge.overlays_catalog_changed.emit()
         self.status.setText("Alerta creada. Personalízala aquí o elígela en Triggers → Mostrar en.")
+
+    def _import_theme(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Importar tema completo", "", "Tema (*.slbpack)")
+        if not path:
+            return
+        try:
+            pieces = import_pack(Path(path))
+        except (ValueError, OSError) as exc:
+            QMessageBox.warning(self, "Importar tema", str(exc))
+            return
+        self.refresh(select_id=pieces[0].id)
+        self.bridge.overlays_catalog_changed.emit()
+        self.rt.log(f"Tema importado: {len(pieces)} pieza(s)")
+        self.status.setText(f"Tema importado: {len(pieces)} pieza(s). Copia sus URLs a fuentes Navegador de OBS.")
 
     def _import_html(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Importar HTML independiente", "", "HTML (*.html *.htm)")

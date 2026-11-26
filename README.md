@@ -37,7 +37,10 @@ Funcionan mientras el bot esté abierto, o en modo servidor tras recargar el per
 El [editor web de overlays](docs/EDITOR_WEB.md) vive en el mismo
 repositorio: diseña alertas, chat o actividad con controles o HTML/CSS,
 consulta las etiquetas y descarga un HTML para **Overlays → Importar
-HTML…**. La [galería](docs/GALERIA.md) admite aportes revisados por PR.
+HTML…**. La [galería](docs/GALERIA.md) incluye 20 temas completos:
+instala sus piezas juntas desde **Overlays → Importar tema (.slbpack)…**.
+Visita la [guía de temas](docs/TEMAS.md) para armar packs, configurar
+las fuentes en OBS o publicar con un perfil de creador.
 
 ### Linux Mint, Ubuntu o Debian
 
