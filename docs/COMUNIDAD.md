@@ -1,7 +1,7 @@
 # Habilitar cuentas y aportes de la comunidad
 
-El sitio conserva dos partes: **Galería** (colección curada en GitHub, sin
-cuenta) y **Comunidad** (aportes de creadores con Google). La página de
+La **Galería** se puede explorar sin cuenta. En **Mi cuenta** puedes iniciar sesión con
+Google y personalizar tu perfil; en **Comunidad** puedes ver o publicar aportes. La página de
 Comunidad mantiene el aporte por GitHub hasta que configures Supabase.
 No se usan contraseñas propias ni se comparten correos de Google.
 
@@ -38,7 +38,7 @@ No se usan contraseñas propias ni se comparten correos de Google.
 4. Copia la **Project URL** sin barra final desde el panel **Connect** y la
    clave que empieza con **`sb_publishable_`** desde **Settings → API Keys**.
    Son los únicos dos valores que van en `docs/comunidad/config.js`. En el CSP de
-   `docs/comunidad/index.html` y `docs/galeria/index.html`, añade el origen exacto de ese proyecto
+   `docs/comunidad/index.html`, `docs/galeria/index.html` y `docs/cuenta/index.html`, añade el origen exacto de ese proyecto
    a `connect-src`. **Nunca** publiques una clave `service_role`,
    `sb_secret_`, el secreto de Google ni tokens de sesiones.
 5. Publica por la rama de Pages. Primero prueba con dos cuentas Google:
@@ -81,6 +81,7 @@ retiran.
 
 Tras instalar las migraciones anteriores, aplica una sola vez
 [`202611260610_overlay_profiles_packs.sql`](../supabase/migrations/202611260610_overlay_profiles_packs.sql).
-Se puede guardar el perfil antes de publicar. Activar el modo editor es voluntario
+Desde **Mi cuenta** se puede guardar el nombre público y la biografía privada sin subir archivos.
+El inicio de sesión iniciado ahí vuelve al panel a través de la ruta de Comunidad ya autorizada. Activar el modo editor es voluntario
 y no concede permisos de moderación. Solo el dueño ve el perfil; al publicar se usa
 su alias como crédito. Consulta [Temas y paquetes](TEMAS.md) para el flujo de archivos.

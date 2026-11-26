@@ -90,7 +90,7 @@
 .theme-inspect { display: grid; grid-template-columns: minmax(0,1fr) minmax(185px, .45fr); gap: 15px; margin-bottom: 8px; }
 .theme-inspect-visual { min-width: 0; }
 .theme-inspect-visual h3 { margin: 0 0 6px; font-size: 14px; }
-.theme-inspect-visual iframe { display: block; width: 100%; aspect-ratio: 16/9; min-height: 125px; border: 1px solid #49606b; border-radius: 8px;
+.theme-inspect-visual iframe { display: block; width: 100%; height: auto; aspect-ratio: 16/9; min-height: 125px; border: 1px solid #49606b; border-radius: 8px;
   background: repeating-conic-gradient(#23313e 0% 25%,#18252f 0% 50%) 50%/16px 16px; }
 .theme-inspect-visual .meta { margin-top: 5px; }
 #theme-pieces { margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }

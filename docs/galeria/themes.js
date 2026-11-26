@@ -54,6 +54,7 @@
     const name = safe(raw.name, 60);
     if (!name) return null;
     const description = safe(raw.description, 240);
+    const author = safe(raw.author, 80);
     const radius = Number.isFinite(raw.radius) ? Math.max(0, Math.min(48, Math.round(raw.radius))) : 12;
     const border = Number.isFinite(raw.border) ? Math.max(0, Math.min(16, Math.round(raw.border))) : 4;
     const common = { accent: raw.accent, textColor: raw.text, background: raw.background, radius, border };
@@ -82,8 +83,8 @@
     ];
     const pack = codec.normalize({ format: "slb-pack", version: 1, name, description, components: pieces });
     used.add(raw.id);
-    return { id: raw.id, name, description, category: raw.category, art: raw.art,
-      index: indexable([name, description, raw.category, starting, banner, mark].join(" ")),
+    return { id: raw.id, name, description, author, category: raw.category, art: raw.art,
+      index: indexable([name, description, author, raw.category, starting, banner, mark].join(" ")),
       secondary: raw.secondary, common, banner, starting, mark, pack };
   }
 
@@ -139,8 +140,8 @@
     inspect.setAttribute("aria-label", "Ver las 8 piezas de " + theme.name);
     const down = button(actions, "Descargar pack", () => downloadTheme(theme), "button primary");
     down.setAttribute("aria-label", "Descargar pack " + theme.name);
-    add(body, "p", "Diseño original · Colección oficial", "meta theme-credit");
-    social?.controls(body, { key: keyFor(theme), name: theme.name, signIn: "../comunidad/#creator-access" });
+    add(body, "p", "Diseño de " + theme.author + " · Colección oficial", "meta theme-credit");
+    social?.controls(body, { key: keyFor(theme), name: theme.name, signIn: "../cuenta/" });
     return card;
   }
 
@@ -174,6 +175,7 @@
     shownTheme = theme;
     get("theme-dialog-title").textContent = theme.name;
     get("theme-dialog-description").textContent = theme.description;
+    get("theme-dialog-credit").textContent = "Diseño de " + theme.author + " · Colección oficial";
     const pieces = get("theme-pieces");
     pieces.replaceChildren();
     for (const piece of theme.pack.components) {
@@ -212,7 +214,7 @@
   search.addEventListener("input", render);
   for (const filter of filters) filter.addEventListener("click", () => { activeFilter = filter.dataset.themeFilter; render(); });
 
-  fetch("themes.json?v=slbpack-v1").then((response) => {
+  fetch("themes.json?v=credits-preview-1").then((response) => {
     if (!response.ok || !codec) throw Error("No se pudo cargar la colección.");
     return response.json();
   }).then((data) => {

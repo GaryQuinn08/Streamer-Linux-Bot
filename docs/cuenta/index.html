@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src https://tgvjkjxsaaatejkcwuxh.supabase.co; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Mi cuenta · Streamer Linux Bot</title>
+<link rel="stylesheet" href="../galeria/gallery.css">
+<link rel="stylesheet" href="account.css?v=account-2">
+<script src="../comunidad/config.js?v=supabase-1" defer></script>
+<script src="../catalog-social.js?v=account-email-1" defer></script>
+<script src="account.js?v=account-2" defer></script>
+</head>
+<body>
+<header class="site-nav"><div class="shell header-inner"><a class="brand" href="../galeria/">Streamer Linux Bot</a><nav aria-label="Estudio"><a href="../galeria/">Galería</a><a href="../editor/">Editor</a><a href="../packs/">Paquetes</a><a href="../comunidad/">Comunidad</a><a href="./" aria-current="page">Mi cuenta</a></nav></div></header>
+<main class="shell account">
+  <header class="hero"><div class="hero-copy">
+    <p class="eyebrow">TU PERFIL EN STREAMER LINUX BOT</p>
+    <h1>Mi cuenta</h1>
+    <p>Personaliza tu perfil sin tener que subir nada. Puedes decidir más adelante si también quieres publicar como editor.</p>
+  </div></header>
+  <section class="account-box account-session" aria-labelledby="session-title">
+    <h2 id="session-title">Sesión</h2>
+    <p id="account-status" role="status" aria-live="polite">Comprobando sesión…</p>
+    <label id="email-field" hidden>Correo de Google (privado)
+      <input id="verified-email" type="text" autocomplete="off" readonly aria-describedby="email-hint">
+      <small id="email-hint">Solo tú puedes ver este correo. Para usar otra cuenta, cierra sesión y elige otra al entrar.</small>
+    </label>
+    <button class="button primary" type="button" id="sign-in" hidden>Iniciar sesión con Google</button>
+    <button class="button secondary" type="button" id="sign-out" hidden>Cerrar sesión</button>
+    <noscript><p>Activa JavaScript para iniciar sesión y guardar tu perfil.</p></noscript>
+  </section>
+  <div class="account-grid" id="account-settings" hidden>
+    <section class="account-box" aria-labelledby="profile-title">
+      <h2 id="profile-title">Tu perfil</h2>
+      <form id="profile-form">
+        <label>Nombre público <input id="display-name" required minlength="2" maxlength="60" autocomplete="off" aria-describedby="alias-hint" disabled></label>
+        <small id="alias-hint">Si publicas, este nombre aparecerá como crédito. Tu correo de Google no se publica.</small>
+        <label>Biografía privada (opcional) <textarea id="bio" maxlength="280" rows="4" aria-describedby="bio-hint" disabled></textarea></label>
+        <small id="bio-hint">Solo tú puedes ver tu biografía.</small>
+        <button class="button primary" id="save-profile" type="submit" disabled>Guardar perfil</button>
+      </form>
+      <p id="profile-status" role="status" aria-live="polite"></p>
+      <button class="button secondary" id="retry-profile" type="button" hidden>Volver a cargar perfil</button>
+    </section>
+    <section class="account-box" aria-labelledby="role-title">
+      <h2 id="role-title">Publicar como editor</h2>
+      <p id="role-info">Guarda tu perfil para habilitar esta opción.</p>
+      <button class="button secondary" id="enable-creator" type="button" disabled>Convertirme en editor</button>
+      <a class="button primary" id="go-publish" href="../comunidad/#creator-access" hidden>Ir a publicar en Comunidad</a>
+      <p id="role-status" role="status" aria-live="polite"></p>
+    </section>
+  </div>
+</main>
+</body>
+</html>

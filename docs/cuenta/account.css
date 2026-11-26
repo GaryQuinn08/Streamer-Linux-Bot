@@ -1,0 +1,17 @@
+.account { display: grid; gap: 1.15rem; padding-bottom: 2.5rem; }
+.account .hero { margin-block-end: 0; }
+.account-box { min-width: 0; padding: 1rem 1.2rem 1.2rem; background: #17212d; border: 1px solid #344659; border-radius: .8rem; }
+.account-box h2 { margin: 0; font-size: 1.2rem; }
+.account-box p { color: #b9c7d5; }
+.account-session { width: min(100%, 50rem); }
+#email-field { max-width: 30rem; margin: .85rem 0; }
+.account-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 1rem; max-width: 66rem; }
+.account form { display: grid; gap: .65rem; margin-top: 1rem; }
+.account label { display: grid; gap: .35rem; }
+.account input, .account textarea { min-width: 0; width: 100%; padding: .55rem .65rem; color: inherit; background: #111b24; border: 1px solid #4b6072; border-radius: .4rem; font: inherit; }
+.account small { color: #b9c7d5; margin-bottom: .35rem; }
+.account form button { justify-self: start; }
+.account button:disabled { opacity: .58; cursor: not-allowed; }
+.account [data-error=true] { color: #ffadbb; }
+.account [role=status]:empty, .account [hidden] { display: none !important; }
+@media (max-width: 43rem) { .account-grid { grid-template-columns: minmax(0, 1fr); } }

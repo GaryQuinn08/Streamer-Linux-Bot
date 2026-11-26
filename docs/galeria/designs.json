@@ -2,7 +2,7 @@
   {
     "id": "aurora",
     "description": "Un regalo entre destellos menta, sobre una tarjeta que respira.",
-    "author": "Streamer Linux Bot",
+    "author": "Gary Quinn",
     "creatorId": "streamer-linux-bot",
     "license": "CC0-1.0",
     "art": "orbit",
@@ -17,7 +17,7 @@
   {
     "id": "comunidad",
     "description": "Conversación compacta, con lavanda para el chat de varias plataformas.",
-    "author": "Streamer Linux Bot",
+    "author": "Gary Quinn",
     "creatorId": "streamer-linux-bot",
     "license": "CC0-1.0",
     "art": "spark",
@@ -32,7 +32,7 @@
   {
     "id": "pulso",
     "description": "Un rastro mandarina para seguir lo que pasa en el directo.",
-    "author": "Streamer Linux Bot",
+    "author": "Gary Quinn",
     "creatorId": "streamer-linux-bot",
     "license": "CC0-1.0",
     "art": "ribbon",
@@ -48,7 +48,7 @@
     "id": "orbita",
     "example": "follow",
     "description": "Cobalto profundo y una bienvenida para tu próxima persona seguidora.",
-    "author": "Streamer Linux Bot",
+    "author": "Gary Quinn",
     "creatorId": "streamer-linux-bot",
     "license": "CC0-1.0",
     "art": "orbit",
@@ -62,7 +62,7 @@
   {
     "id": "pixel-pop",
     "description": "Chat fluorescente para partidas en clave arcade.",
-    "author": "Streamer Linux Bot",
+    "author": "Gary Quinn",
     "creatorId": "streamer-linux-bot",
     "license": "CC0-1.0",
     "art": "grid",
@@ -76,7 +76,7 @@
   {
     "id": "nyx",
     "description": "Una banda nocturna para ver la actividad sin quitarle foco a la escena.",
-    "author": "Streamer Linux Bot",
+    "author": "Gary Quinn",
     "creatorId": "streamer-linux-bot",
     "license": "CC0-1.0",
     "art": "scan",
@@ -91,7 +91,7 @@
     "id": "estudio",
     "example": "donation",
     "description": "Una tarjeta de arena y carbón para mostrar los datos de tu alerta.",
-    "author": "Streamer Linux Bot",
+    "author": "Gary Quinn",
     "creatorId": "streamer-linux-bot",
     "license": "CC0-1.0",
     "art": "ribbon",
@@ -105,7 +105,7 @@
   {
     "id": "mercurio",
     "description": "Chat azul hielo con capas ligeras para conversaciones largas.",
-    "author": "Streamer Linux Bot",
+    "author": "Gary Quinn",
     "creatorId": "streamer-linux-bot",
     "license": "CC0-1.0",
     "art": "wave",
@@ -119,7 +119,7 @@
   {
     "id": "retro-fm",
     "description": "Amarillo limón y líneas de monitor retro para la actividad del LIVE.",
-    "author": "Streamer Linux Bot",
+    "author": "Gary Quinn",
     "creatorId": "streamer-linux-bot",
     "license": "CC0-1.0",
     "art": "grid",
@@ -133,7 +133,7 @@
   {
     "id": "brasa",
     "description": "Rosa coral en primer plano para agradecer un regalo en voz alta.",
-    "author": "Streamer Linux Bot",
+    "author": "Gary Quinn",
     "creatorId": "streamer-linux-bot",
     "license": "CC0-1.0",
     "art": "spark",
@@ -148,7 +148,7 @@
   {
     "id": "violeta",
     "description": "Pequeñas tarjetas moradas para leer mensajes a primera vista.",
-    "author": "Streamer Linux Bot",
+    "author": "Gary Quinn",
     "creatorId": "streamer-linux-bot",
     "license": "CC0-1.0",
     "art": "ribbon",
@@ -162,7 +162,7 @@
   {
     "id": "marea",
     "description": "Actividad con ondas turquesa y un espacio limpio para cada evento.",
-    "author": "Streamer Linux Bot",
+    "author": "Gary Quinn",
     "creatorId": "streamer-linux-bot",
     "license": "CC0-1.0",
     "art": "wave",

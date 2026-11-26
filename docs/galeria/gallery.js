@@ -268,7 +268,7 @@
     save.type = "button";
     save.setAttribute("aria-label", "Descargar HTML de " + model.preset.name);
     save.addEventListener("click", () => download(model));
-    social?.controls(body, { key: designKey(model), name: model.preset.name, signIn: "../comunidad/#creator-access" });
+    social?.controls(body, { key: designKey(model), name: model.preset.name, signIn: "../cuenta/" });
     return card;
   }
 
@@ -313,7 +313,7 @@
     get("search").focus();
   });
 
-  fetch("./designs.json").then((response) => {
+  fetch("./designs.json?v=credits-preview-1").then((response) => {
     if (!response.ok) throw Error("No se pudo leer el catálogo");
     return response.json();
   }).then((entries) => {

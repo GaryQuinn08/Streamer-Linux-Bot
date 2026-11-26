@@ -15,7 +15,7 @@
     ["CC-BY-SA-4.0", ["Crédito al creador y misma licencia al compartir adaptaciones", "https://creativecommons.org/licenses/by-sa/4.0/deed.es"]]
   ]);
   const views = new Map(), stats = new Map(), requests = new Map();
-  let clientPromise, authPromise, nextId = 0;
+  let clientPromise, authPromise, verifiedEmail = "", nextId = 0;
   let authState = configured ? "loading" : "offline";
 
   function loadSDK() {
@@ -49,6 +49,7 @@
 
   function setAuth(state) {
     authState = state;
+    if (state !== "google") verifiedEmail = "";
     for (const entries of views.values()) for (const update of entries) update();
     return state === "google";
   }
@@ -62,11 +63,16 @@
         if (!data?.session) return setAuth("guest");
         const result = await db.auth.getUser();
         if (result.error) return setAuth("guest");
-        return setAuth(result.data?.user?.app_metadata?.provider === "google" ? "google" : "guest");
+        const user = result.data?.user;
+        if (user?.app_metadata?.provider !== "google") return setAuth("guest");
+        verifiedEmail = typeof user.email === "string" ? user.email : "";
+        return setAuth("google");
       }).catch(() => { authPromise = undefined; return setAuth("offline"); });
     }
     return authPromise;
   }
+
+  function googleEmail() { return authState === "google" ? verifiedEmail : ""; }
 
   function nonNegative(value) {
     const numeric = typeof value === "string" || typeof value === "number" ? Number(value) : NaN;
@@ -233,5 +239,5 @@
     };
   }
 
-  window.SLB_SOCIAL = Object.freeze({ configured, client, googleSession, refresh, controls, downloadStarted, licenseLink });
+  window.SLB_SOCIAL = Object.freeze({ configured, client, googleSession, googleEmail, refresh, controls, downloadStarted, licenseLink });
 })();

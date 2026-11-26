@@ -7,91 +7,47 @@
   const statuses = { pending: "Sin publicar", approved: "Publicado", rejected: "No publicado" };
   const modes = new Set(["alert", "chat", "events"]);
   let db, signedIn = false, publications = [], publishedPacks = [];
-  let profile = null, profileReady = false, profileBusy = false, publishing = false;
+  let profile = null, publishing = false;
+  const oauthParams = new URLSearchParams(location.search);
+  const googleCallback = ["code", "error", "error_code"].some((key) => oauthParams.has(key));
+  const returnKey = "slb-oauth-return-account";
 
   function status(message, error = false) {
     get("status").textContent = message;
     get("status").dataset.error = String(error);
   }
 
-  function profileStatus(message, error = false) {
-    get("profile-status").textContent = message;
-    get("profile-status").dataset.error = String(error);
-  }
-
-  function draftProfile() {
-    return {display_name: get("display-name").value.trim(), bio: get("bio").value.trim()};
-  }
-
-  function renderProfileControls() {
-    const draft = draftProfile();
+  function renderPublishing() {
     const editor = profile?.is_creator === true;
-    const dirty = profile && (draft.display_name !== profile.display_name || draft.bio !== profile.bio);
-    const blocked = !profileReady || profileBusy || publishing;
-    get("display-name").disabled = blocked;
-    get("bio").disabled = blocked;
-    get("save-profile").disabled = blocked;
-    get("enable-creator").hidden = editor;
-    get("enable-creator").disabled = blocked || !profile || dirty;
-    get("role-info").textContent = !profileReady ? "El perfil debe estar disponible para habilitar esta opción." :
-      editor ? "Ya eres editor. Tu nombre aparece como crédito en lo que publiques a partir de ahora." :
-      dirty || !profile ? "Guarda tu perfil para habilitar esta opción." :
-      "Es opcional. Al hacerlo, podrás publicar y tu nombre aparecerá como crédito. Tu biografía seguirá siendo privada.";
     get("creator").value = profile?.display_name || "";
     get("submission").hidden = !editor;
-    get("submit").disabled = blocked || !editor;
-    get("submission-kind").disabled = blocked || !editor || !packs;
+    get("submit").disabled = publishing || !editor;
+    get("submission-kind").disabled = publishing || !editor || !packs;
   }
 
-  async function loadProfile() {
-    renderProfileControls();
+  async function loadPublisher() {
     try {
-      const {data:saved, error} = await db.from("overlay_profiles").select("display_name,bio,is_creator").maybeSingle();
+      const {data, error} = await db.from("overlay_profiles").select("display_name,is_creator").maybeSingle();
       if (error) throw error;
-      profile = saved ? {
-        display_name: typeof saved.display_name === "string" ? saved.display_name : "",
-        bio: typeof saved.bio === "string" ? saved.bio : "",
-        is_creator: saved.is_creator === true
-      } : null;
-      get("display-name").value = profile?.display_name || "";
-      get("bio").value = profile?.bio || "";
-      profileReady = true;
+      profile = data;
+      get("auth-info").textContent = profile?.is_creator === true ?
+        "Ya puedes publicar overlays o paquetes. El crédito se toma del nombre guardado en Mi cuenta." :
+        profile ? "Tu perfil ya está guardado. En Mi cuenta puedes activar la opción de publicar como editor." :
+        "Guarda tu perfil en Mi cuenta. Después puedes elegir si quieres publicar como editor.";
     } catch {
-      profileStatus("No se pudo consultar tu perfil. Recarga la página para volver a intentarlo.", true);
-    } finally { renderProfileControls(); }
+      get("auth-info").textContent = "No se pudo consultar tu perfil. Puedes revisarlo desde Mi cuenta.";
+    } finally { renderPublishing(); }
   }
 
-  async function saveProfile(event) {
-    event.preventDefault();
-    if (!signedIn || !profileReady || profileBusy || publishing) return;
-    const draft = draftProfile();
-    if (draft.display_name.length < 2 || draft.display_name.length > 60 || draft.bio.length > 280) {
-      profileStatus("Escribe un nombre de 2 a 60 caracteres y una biografía de hasta 280.", true); return;
-    }
-    profileBusy = true;
-    renderProfileControls();
+  function returnToAccount() {
+    if (!googleCallback) return false;
     try {
-      const {error} = await db.rpc("save_overlay_profile", {p_display_name:draft.display_name, p_bio:draft.bio});
-      if (error) throw error;
-      profile = {...draft, is_creator:profile?.is_creator === true};
-      get("display-name").value = draft.display_name;
-      get("bio").value = draft.bio;
-      profileStatus(profile.is_creator ? "Cambios guardados." : "Perfil guardado. Convertirte en editor es opcional.");
-    } catch { profileStatus("No se pudo guardar tu perfil. Intenta de nuevo.", true); }
-    finally { profileBusy = false; renderProfileControls(); }
-  }
-
-  async function enableCreator() {
-    if (!signedIn || !profile || get("enable-creator").disabled) return;
-    profileBusy = true;
-    renderProfileControls();
-    try {
-      const {error} = await db.rpc("enable_overlay_creator");
-      if (error) throw error;
-      profile.is_creator = true;
-      profileStatus("Ya puedes publicar como editor.");
-    } catch { profileStatus("No se pudo habilitar el modo editor. Intenta de nuevo.", true); }
-    finally { profileBusy = false; renderProfileControls(); }
+      const started = Number(sessionStorage.getItem(returnKey));
+      sessionStorage.removeItem(returnKey);
+      if (!started || Date.now() - started > 15 * 60_000 || started > Date.now()) return false;
+    } catch { return false; }
+    location.replace(new URL(signedIn ? "../cuenta/" : "../cuenta/?login=error", location.href));
+    return true;
   }
 
   function element(parent, name, text) {
@@ -155,7 +111,7 @@
       try { download(design, key); }
       catch { status("No se pudo generar el HTML de este diseño.", true); }
     });
-    const release = social.controls(card, { key, name:design.name, signIn:"#creator-access" });
+    const release = social.controls(card, { key, name:design.name, signIn:"../cuenta/" });
     publications.push({ key, release });
   }
 
@@ -209,7 +165,7 @@
       try { if (packs.download(pack) !== false) void social.downloadStarted(key); }
       catch { status("No se pudo descargar este paquete.", true); }
     });
-    const release = social.controls(card, {key, name:pack.name, signIn:"#creator-access"});
+    const release = social.controls(card, {key, name:pack.name, signIn:"../cuenta/"});
     publishedPacks.push({key,release});
   }
 
@@ -276,7 +232,7 @@
     }
     if (file.size > 65536) { status("Selecciona un archivo .slbpack de hasta 64 KiB.", true); return; }
     publishing = true;
-    renderProfileControls();
+    renderPublishing();
     try {
       let pack;
       try { pack = packs.parse(await file.text()); }
@@ -292,7 +248,7 @@
       status("Tu paquete ya está publicado.");
       await Promise.allSettled([showPublishedPacks(),showMyPacks()]);
     } catch { status("No se pudo publicar el paquete. Inténtalo más tarde.", true); }
-    finally { publishing = false; renderProfileControls(); }
+    finally { publishing = false; renderPublishing(); }
   }
 
   async function submit(event) {
@@ -308,7 +264,7 @@
       status("Selecciona un HTML exportado por el editor de hasta 250 KB.", true); return;
     }
     publishing = true;
-    renderProfileControls();
+    renderPublishing();
     try {
       const reopened = studio.reopen(await file.text());
       // Se envían únicamente los ajustes declarativos; ningún código del archivo.
@@ -325,7 +281,7 @@
       await Promise.allSettled([showPublished(), showMine()]);
     } catch {
       status("No se pudo leer el diseño. Descarga un HTML nuevo desde nuestro editor e inténtalo otra vez.", true);
-    } finally { publishing = false; renderProfileControls(); }
+    } finally { publishing = false; renderPublishing(); }
   }
 
   async function init() {
@@ -336,41 +292,22 @@
     try {
       db = await social.client();
       signedIn = await social.googleSession();
+      if (returnToAccount()) return;
       get("legacy").hidden = true;
-      get("sign-in").hidden = signedIn;
-      get("sign-out").hidden = !signedIn;
-      get("creator-profile").hidden = !signedIn;
       get("my").hidden = !signedIn;
-      status(signedIn ? "Sesión iniciada con Google." : "Inicia sesión con Google para votar o crear tu perfil.");
-      get("auth-info").textContent = signedIn ?
-        "Tu correo no se publica. Puedes votar aunque no crees un perfil." :
-        "Inicia sesión con Google. Puedes votar sin crear un perfil y tu correo nunca se publica.";
-      get("sign-in").addEventListener("click", async () => {
-        try {
-          const callback = new URL("./",location.href);
-          const {error} = await db.auth.signInWithOAuth({provider:"google",options:{redirectTo:callback.href,
-            queryParams:{prompt:"select_account"}}});
-          if (error) status("No se pudo abrir Google; vuelve a intentarlo.",true);
-        } catch { status("No se pudo abrir Google; vuelve a intentarlo.",true); }
-      });
-      get("sign-out").addEventListener("click", async () => {
-        try {
-          const {error} = await db.auth.signOut({scope:"local"});
-          if (error) { status("No se pudo cerrar la sesión. Intenta de nuevo.",true); return; }
-          location.replace("./");
-        } catch { status("No se pudo cerrar la sesión. Intenta de nuevo.",true); }
-      });
+      status(signedIn ? "Sesión iniciada con Google." : "Puedes explorar y descargar sin iniciar sesión.");
+      if (signedIn) get("account-link").textContent = "Editar mi perfil";
       get("submission").addEventListener("submit",submit);
       get("submission-kind").addEventListener("change",packFields);
-      get("profile-form").addEventListener("input",renderProfileControls);
-      get("profile-form").addEventListener("submit",saveProfile);
-      get("enable-creator").addEventListener("click",enableCreator);
       packFields();
       await Promise.all([showPublished(),showPublishedPacks(),signedIn ? showMine() : null,
-        signedIn ? showMyPacks() : null,signedIn ? loadProfile() : null]);
+        signedIn ? showMyPacks() : null,signedIn ? loadPublisher() : null]);
     } catch {
       status("El servicio de comunidad no está disponible. Puedes seguir usando el editor y la galería.",true);
     }
   }
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted && signedIn) location.reload();
+  });
   init();
 })();

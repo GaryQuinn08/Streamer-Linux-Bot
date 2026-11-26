@@ -8,40 +8,22 @@
 <title>Comunidad de creadores · Streamer Linux Bot</title>
 <link rel="stylesheet" href="../galeria/gallery.css">
 <link rel="stylesheet" href="../catalog-social.css?v=catalog-social-1">
-<link rel="stylesheet" href="community.css?v=creator-profile-1">
+<link rel="stylesheet" href="community.css?v=account-1">
 <script src="../editor/engine.js?v=editor-visual-1" defer></script>
 <script src="../overlay-pack.js?v=packs-1" defer></script>
 <script src="config.js?v=supabase-1" defer></script>
 <script src="../catalog-social.js?v=catalog-packs-1" defer></script>
-<script src="community.js?v=creator-profile-1" defer></script>
+<script src="community.js?v=account-1" defer></script>
 </head>
 <body>
-<header class="site-nav"><div class="shell header-inner"><a class="brand" href="../galeria/">Streamer Linux Bot</a><nav aria-label="Estudio"><a href="../galeria/">Galería</a><a href="../editor/">Editor</a><a href="../packs/">Paquetes</a><a href="./" aria-current="page">Comunidad</a></nav></div></header>
+<header class="site-nav"><div class="shell header-inner"><a class="brand" href="../galeria/">Streamer Linux Bot</a><nav aria-label="Estudio"><a href="../galeria/">Galería</a><a href="../editor/">Editor</a><a href="../packs/">Paquetes</a><a href="./" aria-current="page">Comunidad</a><a href="../cuenta/">Mi cuenta</a></nav></div></header>
 <main class="shell community">
   <header class="hero"><div class="hero-copy"><p class="eyebrow">DISEÑA · COMPARTE · DA CRÉDITO</p><h1>Comunidad de creadores</h1><p>Comparte overlays individuales o paquetes completos para tu stream. Puedes explorar y descargar sin iniciar sesión; usa Google para votar o crear tu perfil. Publicar es opcional.</p></div><a class="button secondary" href="../editor/">Crear un diseño</a></header>
   <p id="status" role="status" aria-live="polite">Comprobando el estado de los aportes…</p>
   <section class="community-box" id="creator-access">
-    <h2>Tu cuenta de la comunidad</h2>
-    <p id="auth-info">Inicia sesión con Google. Puedes votar sin crear un perfil y tu correo nunca se publica.</p>
-    <div class="community-actions"><button class="button primary" id="sign-in" type="button" hidden>Iniciar sesión con Google</button><button class="button secondary" id="sign-out" type="button" hidden>Cerrar sesión</button></div>
-    <div class="creator-workspace" id="creator-profile" hidden>
-      <div>
-        <h3>Tu perfil</h3>
-        <p id="profile-hint">Elige qué nombre quieres mostrar. No necesitas convertirte en editor para guardar tu perfil.</p>
-        <form id="profile-form" class="community-form" aria-describedby="profile-hint">
-          <label>Nombre público <input id="display-name" required minlength="2" maxlength="60" autocomplete="off"></label>
-          <label>Biografía (opcional) <textarea id="bio" maxlength="280" rows="3" aria-describedby="bio-hint"></textarea></label>
-          <small id="bio-hint">Solo tú puedes ver tu biografía. Si publicas, se muestra tu nombre de perfil, no tu correo.</small>
-          <button class="button primary" id="save-profile" type="submit">Guardar perfil</button>
-        </form>
-        <p id="profile-status" role="status" aria-live="polite"></p>
-      </div>
-      <div class="creator-role">
-        <h3>Publicar como editor</h3>
-        <p id="role-info">Guarda tu perfil para habilitar esta opción.</p>
-        <button class="button secondary" id="enable-creator" type="button" disabled>Convertirme en editor</button>
-      </div>
-    </div>
+    <h2>Comparte tus diseños</h2>
+    <p id="auth-info">Desde Mi cuenta puedes iniciar sesión, guardar tu perfil y elegir si quieres publicar como editor.</p>
+    <div class="community-actions"><a class="button secondary" id="account-link" href="../cuenta/">Ir a Mi cuenta</a></div>
     <form id="submission" class="community-form" hidden>
       <h3>Comparte un diseño</h3>
       <label>Qué quieres publicar <select id="submission-kind"><option value="overlay">Overlay individual</option><option value="pack">Paquete de overlays</option></select></label>
