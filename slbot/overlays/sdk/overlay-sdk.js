@@ -3,7 +3,7 @@
  *
  * Inclúyelo en tu index.html:   <script src="/sdk/overlay-sdk.js"></script>
  *
- * Parámetros (vienen de la URL, ej. ?color=%23ff0000&duration=8):
+ * Parámetros (URL personalizada > preferencia guardada > valor del script):
  *   SLB.param("color", "#ff4d8d")     -> texto
  *   SLB.number("duration", 5)         -> número
  *   SLB.bool("sound", true)           -> booleano
@@ -23,8 +23,13 @@
   const messageHandlers = [];
   const overlayPath = window.location.pathname.match(/^\/overlay\/([a-z0-9_-]+)(?:\/|$)/);
 
+  const overlayId = overlayPath ? overlayPath[1] : null;
+  const presets = /* SLB_PRESETS */ {};
+  const preset = overlayId && Object.prototype.hasOwnProperty.call(presets, overlayId) ? presets[overlayId] : {};
+
   function param(name, fallback) {
-    return query.has(name) ? query.get(name) : fallback;
+    if (query.has(name)) return query.get(name);
+    return Object.prototype.hasOwnProperty.call(preset, name) ? String(preset[name]) : fallback;
   }
 
   function number(name, fallback) {
@@ -33,8 +38,8 @@
   }
 
   function bool(name, fallback) {
-    if (!query.has(name)) return fallback;
-    return ["1", "true", "yes", "si", "on"].includes(query.get(name).toLowerCase());
+    const value = param(name, null);
+    return value === null ? fallback : ["1", "true", "yes", "si", "on"].includes(value.toLowerCase());
   }
 
   function onMessage(fn) {
@@ -75,6 +80,6 @@
     ws.onclose = () => setTimeout(connect, 2000); // reconexión automática
   }
 
-  window.SLB = { param, number, bool, onMessage, onEvent, onAlert };
+  window.SLB = { overlayId, param, number, bool, onMessage, onEvent, onAlert };
   connect();
 })();

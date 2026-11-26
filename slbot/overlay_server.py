@@ -54,15 +54,20 @@ class OverlayServer:
                 web.get("/overlay/{id}/{path:.+}", self._overlay_file),
             ]
         )
-        self._runner = web.AppRunner(app)
-        await self._runner.setup()
-        site = web.TCPSite(self._runner, "127.0.0.1", port)
-        await site.start()
-        self.port = self._runner.addresses[0][1]
+        runner = web.AppRunner(app, shutdown_timeout=2)
+        try:
+            await runner.setup()
+            await web.TCPSite(runner, "127.0.0.1", port).start()
+        except BaseException:
+            await runner.cleanup()
+            raise
+        self._runner = runner
+        self.port = runner.addresses[0][1]
 
     async def stop(self) -> None:
-        for ws in list(self.clients):
-            await ws.close()
+        self.port = None
+        await asyncio.gather(*(ws.close(drain=False) for ws in list(self.clients)),
+                             return_exceptions=True)
         if self._runner is not None:
             await self._runner.cleanup()
             self._runner = None
@@ -108,14 +113,30 @@ class OverlayServer:
     async def _index(self, request: web.Request) -> web.Response:
         rows = "".join(
             f'<li><a href="/overlay/{quote(o.id)}/">{html.escape(o.name)}</a> '
-            f"<small>({html.escape(o.id)})</small></li>"
+            f"<small>({html.escape(o.id)})</small><p>{html.escape(o.description)}</p></li>"
             for o in list_overlays().values()
         )
-        body = f"<!doctype html><meta charset='utf-8'><title>Streamer Linux Bot</title><h1>Overlays</h1><ul>{rows}</ul>"
+        body = (
+            "<!doctype html><html lang='es'><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+            "<title>Streamer Linux Bot</title><style>"
+            "body{font:1rem system-ui;max-width:45rem;margin:3rem auto;padding:0 1rem;"
+            "background:#171b26;color:#f2f4fb}a{color:#9bd2ff}ul{padding:0;list-style:none}"
+            "li{padding:1rem;background:#242b3c;border-radius:.5rem;margin:.6rem 0}"
+            "li p{margin:.5rem 0 0;color:#c7cedf}</style>"
+            "<h1>Overlays y alertas</h1><p>Abre una alerta para obtener la URL de OBS. "
+            "Para personalizar, crear o importar, usa la pestaña Overlays de la aplicación.</p>"
+            f"<ul>{rows}</ul></html>"
+        )
         return web.Response(text=body, content_type="text/html", headers=NO_STORE)
 
-    async def _sdk(self, request: web.Request) -> web.FileResponse:
-        return web.FileResponse(SDK_DIR / "overlay-sdk.js", headers=NO_STORE)
+    async def _sdk(self, request: web.Request) -> web.Response:
+        raw = self.rt.config.settings.get("overlay_presets", {})
+        presets = raw if isinstance(raw, dict) else {}
+        values = {key: value for key, value in presets.items() if isinstance(value, dict)}
+        sdk = (SDK_DIR / "overlay-sdk.js").read_text(encoding="utf-8")
+        script = sdk.replace("/* SLB_PRESETS */ {}", json.dumps(values, ensure_ascii=True), 1)
+        return web.Response(text=script, content_type="application/javascript", headers=NO_STORE)
 
     async def _ws(self, request: web.Request) -> web.WebSocketResponse:
         overlay_id = request.match_info["id"]

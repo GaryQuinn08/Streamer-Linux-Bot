@@ -1,4 +1,4 @@
-Streamer Linux Bot 0.2.0 beta · instalación en tu cuenta
+Streamer Linux Bot 0.2.0 beta 2 · instalación en tu cuenta
 ===============================================================
 
 Usa esta variante si el .deb no encuentra python3-pyside6.qtwidgets.
@@ -13,7 +13,8 @@ Necesitas Internet y Python 3.11 o superior.
 4. Abre «Streamer Linux Bot (beta)» en el menú. Ve a «Primeros pasos».
 
 La descarga inicial de Qt ocupa aproximadamente 90 MB. Los ajustes previos
-de Streamer Linux Bot se conservan. Esta variante no instala OBS ni TikTokLive.
+de Streamer Linux Bot se conservan. Si el puerto está ocupado, la ventana
+abre sin un puerto activo; asígnalo en Inicio. Esta variante no instala OBS ni TikTokLive.
 
 Si falla, comparte la salida de:
    cat /etc/os-release

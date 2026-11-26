@@ -29,8 +29,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    window = MainWindow(runtime, bridge)
-    window.show()
-    code = app.exec()
-    runtime.stop()
-    return code
+    try:
+        window = MainWindow(runtime, bridge)
+        window.show()
+        return app.exec()
+    finally:
+        runtime.stop()

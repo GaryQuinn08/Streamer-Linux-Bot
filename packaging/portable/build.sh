@@ -9,8 +9,8 @@ import sys
 from zipfile import ZipFile, ZIP_DEFLATED
 
 src, dest = map(Path, sys.argv[1:])
-prefix = "Streamer-Linux-Bot-0.2.0-beta-portable/"
-path = dest / "Streamer-Linux-Bot-0.2.0-beta-portable.zip"
+prefix = "Streamer-Linux-Bot-0.2.0-beta2-portable/"
+path = dest / "Streamer-Linux-Bot-0.2.0-beta2-portable.zip"
 with ZipFile(path, "w", ZIP_DEFLATED) as zip:
     for name in ("instalar.sh", "launcher", "requirements.txt", "INSTALAR.txt"):
         zip.write(src / "packaging/portable" / name, prefix + name)

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import errno
 import logging
 import threading
 import time
@@ -23,6 +24,7 @@ from .connectors.tiktok import TiktokConnector
 from .core.config import Config, DEFAULT_ACTIONS, DEFAULT_TRIGGERS, Action, Trigger
 from .core.engine import Engine
 from .core.events import Event, EventBus
+from .overlay_manager import find_overlay, validate_overlay_values
 from .overlay_server import OverlayServer
 
 log = logging.getLogger("slb.runtime")
@@ -49,6 +51,8 @@ class Runtime:
         self.bus = EventBus()
         self.engine = Engine(self)
         self.overlays = OverlayServer(self)
+        self.overlay_port_message = ""
+        self._overlay_lock = asyncio.Lock()
         self.obs = ObsConnector(self)
         self.connectors: dict[str, Connector] = {
             "obs": self.obs,
@@ -89,7 +93,10 @@ class Runtime:
         self.submit(self.bus.publish(ev))
 
     async def save_gift_rule(self, enabled: bool, gift_name: str, cooldown: int,
-                             title: str, sound: str = "") -> None:
+                             title: str, sound: str = "", overlay_id: str = "gift-alert") -> None:
+        if find_overlay(overlay_id) is None:
+            raise ValueError("El overlay seleccionado ya no existe.")
+
         triggers = copy.deepcopy(self.config.triggers)
         actions = copy.deepcopy(self.config.actions)
         trigger = next((t for t in triggers if t.id == "tiktok-gift"), None)
@@ -107,11 +114,11 @@ class Runtime:
             trigger.filters["gift_name"] = gift_name
         else:
             trigger.filters.pop("gift_name", None)
-        step = next((s for s in action.steps if s.get("type") == "overlay_alert"
-                     and s.get("overlay", "gift-alert") == "gift-alert"), None)
+        step = next((s for s in action.steps if s.get("type") == "overlay_alert"), None)
         if step is None:
             step = {"type": "overlay_alert", "overlay": "gift-alert", "text": "x{count}"}
             action.steps.insert(0, step)
+        step["overlay"] = overlay_id
         step["title"] = title
         action.steps = [s for s in action.steps if s.get("id") != "quick-gift-sound"]
         if sound:
@@ -121,6 +128,65 @@ class Runtime:
         saved.save()
         self.config.triggers, self.config.actions = triggers, actions
         self.log("Regla de regalos actualizada.")
+
+    async def _forward_overlay_event(self, event: Event) -> None:
+        await self.overlays.forward_event(event)
+
+    async def change_overlay_port(self, port: int) -> int:
+        if type(port) is not int or not 1 <= port <= 65535:
+            raise ValueError("Escribe un puerto entre 1 y 65535.")
+        async with self._overlay_lock:
+            if port == self.port:
+                return port
+            candidate = OverlayServer(self)
+            try:
+                await candidate.start(port)
+            except OSError as exc:
+                if exc.errno == errno.EADDRINUSE:
+                    raise ValueError(f"El puerto {port} ya está ocupado. Elige otro.") from exc
+                raise ValueError(f"No se pudo usar el puerto {port}: {exc.strerror or exc}") from exc
+            settings = {**self.config.settings, "overlay_port": port}
+            try:
+                Config(settings=settings, triggers=self.config.triggers, actions=self.config.actions,
+                       path=self.config.path).save()
+            except BaseException:
+                await candidate.stop()
+                raise
+            previous, self.overlays = self.overlays, candidate
+            self.config.settings = settings
+            self.overlay_port_message = ""
+            await previous.stop()
+            self.log(f"Servidor de overlays en http://127.0.0.1:{port}/")
+            return port
+
+    async def save_overlay_preset(self, overlay_id: str, values: dict[str, str]) -> None:
+        info = find_overlay(overlay_id)
+        if info is None:
+            raise ValueError("Ese overlay ya no existe.")
+        checked = validate_overlay_values(info, values)
+        existing = self.config.settings.get("overlay_presets", {})
+        presets = dict(existing) if isinstance(existing, dict) else {}
+        if checked:
+            presets[overlay_id] = checked
+        else:
+            presets.pop(overlay_id, None)
+        settings = {**self.config.settings, "overlay_presets": presets}
+        Config(settings=settings, triggers=self.config.triggers, actions=self.config.actions,
+               path=self.config.path).save()
+        self.config.settings = settings
+
+    async def preview_overlay(self, overlay_id: str) -> None:
+        if self.port is None:
+            raise ValueError("Asigna un puerto de overlays primero.")
+        if find_overlay(overlay_id) is None:
+            raise ValueError("Ese overlay ya no existe.")
+        if overlay_id == "event-feed":
+            await self.overlays.forward_event(Event("tiktok", "gift", "viewer_demo",
+                                                    {"gift_name": "Rose", "count": 3}))
+        else:
+            await self.overlays.broadcast(overlay_id, {
+                "channel": "alert", "overlay": overlay_id, "title": "viewer_demo envió Rose", "text": "x3",
+            })
 
     # -- ciclo de vida -----------------------------------------------------
 
@@ -156,10 +222,21 @@ class Runtime:
 
     async def _startup(self) -> None:
         self.bus.subscribe(self.engine.on_event)
-        self.bus.subscribe(self.overlays.forward_event)
-        port = self._port_override if self._port_override is not None else int(self.config.settings["overlay_port"])
-        await self.overlays.start(port)
-        self.log(f"Servidor de overlays en http://127.0.0.1:{self.overlays.port}/")
+        self.bus.subscribe(self._forward_overlay_event)
+        port = self._port_override if self._port_override is not None else self.config.settings.get("overlay_port")
+        if type(port) is int and 0 <= port <= 65535:
+            try:
+                await self.overlays.start(port)
+                self.log(f"Servidor de overlays en http://127.0.0.1:{self.overlays.port}/")
+            except OSError as exc:
+                if exc.errno == errno.EADDRINUSE:
+                    self.overlay_port_message = f"El puerto {port} está ocupado. Asigna otro puerto para activar los overlays."
+                else:
+                    self.overlay_port_message = f"No se pudo usar el puerto {port}. Asigna otro para activar los overlays."
+        else:
+            self.overlay_port_message = "Asigna un puerto para activar los overlays."
+        if self.overlay_port_message:
+            self.log(self.overlay_port_message)
         if self.config.settings["obs"].get("autoconnect"):
             self.spawn(self.obs.start())
 

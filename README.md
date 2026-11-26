@@ -4,7 +4,7 @@ Aplicación de escritorio para Linux que automatiza tu stream: recibe eventos
 (chat, seguidores, regalos, donaciones...), los pasa por **triggers** y ejecuta
 **acciones** (alertas en pantalla, cambios de escena en OBS, sonidos, TTS...).
 
-## Beta 0.2.0 para Linux
+## Beta 2 de 0.2.0 para Linux
 
 Esta primera beta está preparada para **Debian 13** (verificada en amd64).
 Tiene simulador sin cuenta, dos overlays para OBS, configuración de OBS desde
@@ -18,7 +18,7 @@ probar la app. La compatibilidad con otras distribuciones aún no se valida.
 Descarga el paquete y ejecuta el comando desde la carpeta que lo contiene:
 
 ```bash
-sudo apt install ./streamer-linux-bot_0.2.0~beta1_all.deb
+sudo apt install ./streamer-linux-bot_0.2.0~beta2_all.deb
 ```
 
 Abre **Streamer Linux Bot** desde el menú o con `streamer-linux-bot`. Para
@@ -89,6 +89,25 @@ Conector o botón de prueba (Qt) → Event → EventBus ─┬→ Engine → tri
                                                   └→ Actividad → overlay integrado de últimos eventos
 Una acción "overlay_alert" envía una alerta solo al overlay seleccionado.
 ```
+
+## Catálogo, alertas y puerto
+
+- En **Inicio** abre **Abrir catálogo de alertas** para ver las alertas
+  incluidas, creadas e importadas en la misma página de siempre.
+- En **Overlays** puedes ajustar valores como color, duración y tamaño,
+  guardarlos y probar la alerta. La URL no cambia al guardar: actualiza la
+  fuente de OBS. Si tu URL antigua trae parámetros después de `?`, esos
+  parámetros prevalecen; copia la URL limpia para usar lo guardado.
+- **Nueva alerta** crea una copia editable de la alerta animada. Selecciónala
+  en **Triggers → Mostrar en** para usarla con la regla de regalos.
+- Se aceptan ZIP o carpetas con `manifest.json` e `index.html`, y HTML
+  independiente. El HTML antiguo se muestra, pero no recibe eventos
+  automáticamente sin adaptarlo al SDK; no se convierten exportaciones
+  propietarias de otras aplicaciones.
+- Si el puerto anterior está ocupado, abre igual la ventana y deja el campo
+  en blanco. Escribe otro puerto en **Inicio → Puerto de overlays**.
+  Solo se guarda cuando el servidor consigue escucharlo. Si cambias un
+  puerto activo, actualiza su URL en OBS una sola vez.
 
 ## Configuración
 

@@ -19,7 +19,7 @@ data_home=${XDG_DATA_HOME:-"$HOME/.local/share"}
 root="$data_home/streamer-linux-bot-portable"
 desktop="$data_home/applications"
 mkdir -p "$root" "$desktop"
-target=$(mktemp -d "$root/beta1.XXXXXXXX")
+target=$(mktemp -d "$root/beta2.XXXXXXXX")
 completed=0
 trap '[ "$completed" -eq 1 ] || rm -rf -- "$target"' EXIT
 trap 'exit 1' HUP INT TERM

@@ -5,10 +5,9 @@ import functools
 import json
 import re
 from pathlib import Path
-from urllib.parse import urlencode
 
 from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QGuiApplication, QPixmap
+from PySide6.QtGui import QColor, QDesktopServices, QGuiApplication, QIntValidator, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -18,6 +17,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
+    QInputDialog,
     QHeaderView,
     QLabel,
     QLineEdit,
@@ -40,7 +40,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..connectors.simulator import SAMPLE_KINDS, sample_event
-from ..overlay_manager import OverlayInfo, import_overlay, list_overlays
+from ..overlay_manager import OverlayInfo, create_alert, import_overlay, list_overlays, validate_overlay_values
 from ..runtime import Runtime
 
 SAMPLE_LABELS = {
@@ -56,6 +56,9 @@ class LogBridge(QObject):
 
     message = Signal(str)
     gift_save_done = Signal(str)
+    overlay_port_done = Signal(str)
+    overlay_saved = Signal(str, str)
+    overlays_catalog_changed = Signal()
 
 
 # --------------------------------------------------------------------------
@@ -63,9 +66,10 @@ class LogBridge(QObject):
 # --------------------------------------------------------------------------
 
 class HomeTab(QWidget):
-    def __init__(self, runtime: Runtime) -> None:
+    def __init__(self, runtime: Runtime, bridge: LogBridge) -> None:
         super().__init__()
         self.rt = runtime
+        self.bridge = bridge
         outer = QVBoxLayout(self)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -74,9 +78,31 @@ class HomeTab(QWidget):
         scroll.setWidget(body)
         outer.addWidget(scroll)
 
+        overlay_group = QGroupBox("Servidor local de overlays")
+        overlay_form = QFormLayout(overlay_group)
         self.server_label = QLabel()
+        self.server_label.setWordWrap(True)
         self.server_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        layout.addWidget(self.server_label)
+        overlay_form.addRow(self.server_label)
+        port_row = QHBoxLayout()
+        self.overlay_port = QLineEdit(str(runtime.port) if runtime.port is not None else "")
+        self.overlay_port.setObjectName("overlayPort")
+        self.overlay_port.setValidator(QIntValidator(1, 65535, self))
+        self.overlay_port.setPlaceholderText("Ejemplo: 8766")
+        self.assign_port = QPushButton("Asignar puerto")
+        self.assign_port.clicked.connect(self._assign_overlay_port)
+        self.overlay_port.returnPressed.connect(self._assign_overlay_port)
+        self.open_catalog = QPushButton("Abrir catálogo de alertas")
+        self.open_catalog.clicked.connect(self._open_overlay_catalog)
+        port_row.addWidget(self.overlay_port)
+        port_row.addWidget(self.assign_port)
+        port_row.addWidget(self.open_catalog)
+        overlay_form.addRow("Puerto de overlays:", port_row)
+        self.port_result = QLabel()
+        self.port_result.setWordWrap(True)
+        overlay_form.addRow(self.port_result)
+        self.bridge.overlay_port_done.connect(self._overlay_port_done)
+        layout.addWidget(overlay_group)
 
         layout.addWidget(QLabel("<b>Conexiones</b>"))
         self.table = QTableWidget(0, 2)
@@ -159,6 +185,36 @@ class HomeTab(QWidget):
         timer.timeout.connect(self.refresh)
         timer.start(1000)
 
+    def _assign_overlay_port(self) -> None:
+        if not self.assign_port.isEnabled():
+            return
+        if not self.overlay_port.hasAcceptableInput():
+            self.port_result.setText("Escribe un puerto entre 1 y 65535.")
+            return
+        self.assign_port.setEnabled(False)
+        self.port_result.setText("Comprobando el puerto…")
+        future = self.rt.submit(self.rt.change_overlay_port(int(self.overlay_port.text())))
+        signal = self.bridge.overlay_port_done
+
+        def done(completed) -> None:
+            if not completed.cancelled():
+                error = completed.exception()
+                signal.emit(str(error) if error else "")
+
+        future.add_done_callback(done)
+
+    def _overlay_port_done(self, error: str) -> None:
+        self.assign_port.setEnabled(True)
+        if error:
+            self.port_result.setText(error)
+        else:
+            self.port_result.setText("Puerto guardado. Si cambió, vuelve a copiar la URL en OBS.")
+        self.refresh()
+
+    def _open_overlay_catalog(self) -> None:
+        if self.rt.port is not None:
+            QDesktopServices.openUrl(QUrl(f"http://127.0.0.1:{self.rt.port}/"))
+
     def _connect_obs(self) -> None:
         host = self.obs_host.text().strip()
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]{0,252}", host):
@@ -178,7 +234,10 @@ class HomeTab(QWidget):
         self.rt.emit(sample_event(kind))
 
     def refresh(self) -> None:
-        self.server_label.setText(f"Servidor de overlays: http://127.0.0.1:{self.rt.port}/")
+        port = self.rt.port
+        self.server_label.setText(f"Servidor de overlays: http://127.0.0.1:{port}/" if port is not None
+                                  else self.rt.overlay_port_message or "Asigna un puerto para activar los overlays.")
+        self.open_catalog.setEnabled(port is not None)
         self.connect_obs.setEnabled(self.rt.obs.status != "conectando…")
         connectors = list(self.rt.connectors.values())
         if self.table.rowCount() != len(connectors):
@@ -202,8 +261,7 @@ class TriggersTab(QWidget):
         form = QFormLayout(editor)
         trigger = next((t for t in runtime.config.triggers if t.id == "tiktok-gift"), None)
         action = runtime.config.action_by_id(trigger.action_id if trigger else "alert-gift")
-        step = next((s for s in action.steps if s.get("type") == "overlay_alert"
-                     and s.get("overlay", "gift-alert") == "gift-alert"), {}) if action else {}
+        step = next((s for s in action.steps if s.get("type") == "overlay_alert"), {}) if action else {}
         self.enabled_rule = QCheckBox()
         self.enabled_rule.setChecked(trigger.enabled if trigger else True)
         self.gift_name = QLineEdit(str(trigger.filters.get("gift_name", "")) if trigger else "")
@@ -212,6 +270,9 @@ class TriggersTab(QWidget):
         self.cooldown.setRange(0, 3600)
         self.cooldown.setValue(int(trigger.cooldown_s) if trigger else 0)
         self.title = QLineEdit(str(step.get("title", "{user} envió {gift_name}")))
+        self.destination = QComboBox()
+        self._refresh_targets(str(step.get("overlay", "gift-alert")))
+        bridge.overlays_catalog_changed.connect(self._refresh_targets)
         sound = next((s.get("file", "") for s in action.steps
                       if s.get("id") == "quick-gift-sound"), "") if action else ""
         self.sound = QLineEdit(str(sound))
@@ -224,6 +285,7 @@ class TriggersTab(QWidget):
         form.addRow("Activar:", self.enabled_rule)
         form.addRow("Nombre del regalo:", self.gift_name)
         form.addRow("Espera mínima (s):", self.cooldown)
+        form.addRow("Mostrar en:", self.destination)
         form.addRow("Título del overlay:", self.title)
         form.addRow("Archivo de sonido:", sound_row)
         self.save_button = QPushButton("Guardar regla")
@@ -251,6 +313,15 @@ class TriggersTab(QWidget):
             for col, value in enumerate(values):
                 self.table.setItem(row, col, QTableWidgetItem(value))
 
+    def _refresh_targets(self, selected: str | None = None) -> None:
+        selected = selected or self.destination.currentData()
+        self.destination.clear()
+        for item in sorted(list_overlays().values(), key=lambda item: item.id != "gift-alert"):
+            if item.id != "event-feed":
+                self.destination.addItem(item.name, item.id)
+        index = self.destination.findData(selected)
+        self.destination.setCurrentIndex(max(index, 0))
+
     def _pick_sound(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Elegir sonido", "", "Audio (*.wav *.ogg *.mp3 *.flac);;Todos (*)")
         if path:
@@ -265,6 +336,7 @@ class TriggersTab(QWidget):
         future = self.rt.submit(self.rt.save_gift_rule(
             self.enabled_rule.isChecked(), self.gift_name.text().strip(),
             self.cooldown.value(), title, str(Path(sound).expanduser().resolve()) if sound else "",
+            self.destination.currentData(),
         ))
         bridge = self.bridge
 
@@ -337,9 +409,10 @@ class _ColorButton(QPushButton):
 
 
 class OverlaysTab(QWidget):
-    def __init__(self, runtime: Runtime) -> None:
+    def __init__(self, runtime: Runtime, bridge: LogBridge) -> None:
         super().__init__()
         self.rt = runtime
+        self.bridge = bridge
         self._info: OverlayInfo | None = None
         self._values: dict[str, str] = {}
         self._defaults: dict[str, str] = {}
@@ -350,18 +423,26 @@ class OverlaysTab(QWidget):
         self.list.setMaximumWidth(260)
         self.list.currentItemChanged.connect(self._on_select)
         left.addWidget(self.list)
+        new_alert = QPushButton("Nueva alerta…")
+        new_alert.clicked.connect(self._create_alert)
+        left.addWidget(new_alert)
         import_zip = QPushButton("Importar .zip…")
         import_zip.clicked.connect(self._import_zip)
         import_dir = QPushButton("Importar carpeta…")
         import_dir.clicked.connect(self._import_dir)
         left.addWidget(import_zip)
         left.addWidget(import_dir)
+        import_html = QPushButton("Importar HTML…")
+        import_html.clicked.connect(self._import_html)
+        left.addWidget(import_html)
         root.addLayout(left)
 
         right = QVBoxLayout()
         self.title = QLabel()
+        self.title.setTextFormat(Qt.PlainText)
         self.title.setStyleSheet("font-size: 16px; font-weight: bold;")
         self.desc = QLabel()
+        self.desc.setTextFormat(Qt.PlainText)
         self.desc.setWordWrap(True)
         self.preview = QLabel()
         self.preview.setAlignment(Qt.AlignCenter)
@@ -371,21 +452,37 @@ class OverlaysTab(QWidget):
         self.url = QLineEdit()
         self.url.setReadOnly(True)
         buttons = QHBoxLayout()
-        copy_btn = QPushButton("Copiar URL para OBS")
-        copy_btn.clicked.connect(self._copy_url)
-        open_btn = QPushButton("Abrir en el navegador")
-        open_btn.clicked.connect(self._open_url)
-        buttons.addWidget(copy_btn)
-        buttons.addWidget(open_btn)
+        self.copy_btn = QPushButton("Copiar URL para OBS")
+        self.copy_btn.clicked.connect(self._copy_url)
+        self.open_btn = QPushButton("Abrir en el navegador")
+        self.open_btn.clicked.connect(self._open_url)
+        self.preview_btn = QPushButton("Probar alerta")
+        self.preview_btn.clicked.connect(self._preview)
+        buttons.addWidget(self.copy_btn)
+        buttons.addWidget(self.open_btn)
+        buttons.addWidget(self.preview_btn)
         buttons.addStretch(1)
-        hint = QLabel("En OBS: Fuentes → + → Navegador → pega la URL. "
-                      "Usa los botones de prueba de la pestaña Inicio para verlo funcionar.")
+
+        edits = QHBoxLayout()
+        self.save_btn = QPushButton("Guardar apariencia")
+        self.save_btn.clicked.connect(self._save_preset)
+        self.reset_btn = QPushButton("Restablecer apariencia")
+        self.reset_btn.clicked.connect(self._reset_preset)
+        edits.addWidget(self.save_btn)
+        edits.addWidget(self.reset_btn)
+        edits.addStretch(1)
+        self.status = QLabel()
+        self.status.setWordWrap(True)
+        hint = QLabel("Abre la URL en el navegador o como fuente de OBS antes de probar. "
+                      "Después de guardar la apariencia, actualiza la fuente para verla.")
         hint.setWordWrap(True)
 
         right.addWidget(self.title)
         right.addWidget(self.desc)
         right.addWidget(self.preview)
         right.addWidget(self.form_host)
+        right.addLayout(edits)
+        right.addWidget(self.status)
         right.addWidget(QLabel("URL del overlay:"))
         right.addWidget(self.url)
         right.addLayout(buttons)
@@ -393,6 +490,8 @@ class OverlaysTab(QWidget):
         right.addStretch(1)
         root.addLayout(right, 1)
 
+        self.bridge.overlay_saved.connect(self._preset_saved)
+        self.bridge.overlay_port_done.connect(lambda _error: self._update_url())
         self.refresh()
 
     # -- lista -------------------------------------------------------------
@@ -437,6 +536,9 @@ class OverlaysTab(QWidget):
             self.preview.setPixmap(QPixmap())
             self.preview.setText("(sin vista previa)")
         self._build_form(info)
+        self.status.clear()
+        self.save_btn.setEnabled(bool(info.params))
+        self.reset_btn.setEnabled(bool(info.params))
         self._update_url()
 
     def _build_form(self, info: OverlayInfo) -> None:
@@ -444,13 +546,28 @@ class OverlaysTab(QWidget):
             self.form.removeRow(0)
         self._values.clear()
         self._defaults.clear()
+        presets = self.rt.config.settings.get("overlay_presets", {})
+        saved = presets.get(info.id, {}) if isinstance(presets, dict) else {}
+        if not isinstance(saved, dict):
+            saved = {}
         for p in info.params:
             key = p["key"]
-            default = p.get("default", "")
+            default = p.get("default", p.get("min", 0) if p["type"] == "number" else "")
             self._defaults[key] = self._to_text(default)
-            self._values[key] = self._defaults[key]
-            widget = self._make_widget(p, default)
-            self.form.addRow(p.get("label", key), widget)
+            value = default
+            if key in saved:
+                try:
+                    value = validate_overlay_values(info, {key: saved[key]})[key]
+                    if p["type"] == "bool":
+                        value = value == "true"
+                    elif p["type"] == "number" and isinstance(default, int):
+                        value = int(float(value))
+                except (TypeError, ValueError):
+                    value = default
+            self._values[key] = self._to_text(value)
+            label = QLabel(str(p.get("label", key)))
+            label.setTextFormat(Qt.PlainText)
+            self.form.addRow(label, self._make_widget(p, value))
 
     @staticmethod
     def _to_text(value) -> str:
@@ -460,7 +577,7 @@ class OverlaysTab(QWidget):
 
     def _set_value(self, key: str, value) -> None:
         self._values[key] = self._to_text(value)
-        self._update_url()
+        self.status.setText("Cambios sin guardar.")
 
     def _make_widget(self, p: dict, default) -> QWidget:
         key, kind = p["key"], p["type"]
@@ -479,11 +596,12 @@ class OverlaysTab(QWidget):
             return w
         if kind == "bool":
             w = QCheckBox()
-            w.setChecked(bool(default))
+            w.setChecked(default is True or str(default).lower() in {"true", "1", "yes"})
             w.toggled.connect(setter)
             return w
         if kind == "color":
-            w = _ColorButton(str(default) or "#ffffff")
+            color = str(default)
+            w = _ColorButton(color if re.fullmatch(r"#[0-9a-fA-F]{6}", color) else "#ffffff")
             w.changed.connect(setter)
             return w
         if kind == "select":
@@ -497,19 +615,76 @@ class OverlaysTab(QWidget):
         return w
 
     def _update_url(self) -> None:
-        if self._info is None:
-            return
-        changed = {k: v for k, v in self._values.items() if v != self._defaults.get(k)}
-        url = f"http://127.0.0.1:{self.rt.port}/overlay/{self._info.id}/"
-        if changed:
-            url += "?" + urlencode(changed)
-        self.url.setText(url)
+        port = self.rt.port
+        ready = port is not None and self._info is not None
+        self.url.setText(f"http://127.0.0.1:{port}/overlay/{self._info.id}/" if ready else "")
+        self.url.setPlaceholderText("Asigna un puerto desde Inicio para generar la URL.")
+        for button in (self.copy_btn, self.open_btn, self.preview_btn):
+            button.setEnabled(ready)
 
     def _copy_url(self) -> None:
-        QGuiApplication.clipboard().setText(self.url.text())
+        if self.url.text():
+            QGuiApplication.clipboard().setText(self.url.text())
 
     def _open_url(self) -> None:
-        QDesktopServices.openUrl(QUrl(self.url.text()))
+        if self.url.text():
+            QDesktopServices.openUrl(QUrl(self.url.text()))
+
+    def _preview(self) -> None:
+        if self._info and self.rt.port is not None:
+            self.rt.submit(self.rt.preview_overlay(self._info.id))
+            self.status.setText("Vista de prueba enviada. La página debe estar abierta para verla.")
+
+    def _save_preset(self) -> None:
+        changes = {key: value for key, value in self._values.items() if value != self._defaults[key]}
+        self._write_preset(changes)
+
+    def _reset_preset(self) -> None:
+        self._write_preset({})
+
+    def _write_preset(self, changes: dict[str, str]) -> None:
+        if self._info is None:
+            return
+        overlay_id = self._info.id
+        self.save_btn.setEnabled(False)
+        self.reset_btn.setEnabled(False)
+        future = self.rt.submit(self.rt.save_overlay_preset(overlay_id, changes))
+        signal = self.bridge.overlay_saved
+
+        def done(completed) -> None:
+            if not completed.cancelled():
+                error = completed.exception()
+                signal.emit(overlay_id, str(error) if error else "")
+
+        future.add_done_callback(done)
+
+    def _preset_saved(self, overlay_id: str, error: str) -> None:
+        if self._info is None or self._info.id != overlay_id:
+            return
+        self.save_btn.setEnabled(bool(self._info.params))
+        self.reset_btn.setEnabled(bool(self._info.params))
+        if not error:
+            self._build_form(self._info)
+        self.status.setText(f"No se guardó: {error}" if error else
+                            "Apariencia guardada. Actualiza la fuente de OBS; la URL no cambia.")
+
+    def _create_alert(self) -> None:
+        name, accepted = QInputDialog.getText(self, "Nueva alerta", "Nombre de la alerta:")
+        if not accepted:
+            return
+        try:
+            info = create_alert(name)
+        except (ValueError, OSError) as exc:
+            QMessageBox.warning(self, "Nueva alerta", str(exc))
+            return
+        self.refresh(select_id=info.id)
+        self.bridge.overlays_catalog_changed.emit()
+        self.status.setText("Alerta creada. Personalízala aquí o elígela en Triggers → Mostrar en.")
+
+    def _import_html(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Importar HTML independiente", "", "HTML (*.html *.htm)")
+        if path:
+            self._do_import(Path(path))
 
     # -- importar ------------------------------------------------------------
 
@@ -547,6 +722,8 @@ class OverlaysTab(QWidget):
             return
         self.rt.log(f"Overlay importado: {info.name} ({info.id})")
         self.refresh(select_id=info.id)
+        self.bridge.overlays_catalog_changed.emit()
+        self.status.setText("Overlay importado. Ya aparece en el catálogo.")
 
 
 # --------------------------------------------------------------------------
@@ -568,10 +745,10 @@ class MainWindow(QMainWindow):
         bridge.message.connect(self.log_view.appendPlainText)
 
         tabs = QTabWidget()
-        tabs.addTab(HomeTab(runtime), "Inicio")
+        tabs.addTab(HomeTab(runtime, bridge), "Inicio")
         tabs.addTab(TriggersTab(runtime, bridge), "Triggers")
         tabs.addTab(ActionsTab(runtime, bridge), "Acciones")
-        tabs.addTab(OverlaysTab(runtime), "Overlays")
+        tabs.addTab(OverlaysTab(runtime, bridge), "Overlays")
         tabs.addTab(self.log_view, "Registro")
         guide = QLabel(
             "<h2>Tu primera alerta</h2>"
