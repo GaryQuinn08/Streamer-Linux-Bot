@@ -59,7 +59,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             env = {**os.environ, "SLB_CONFIG_DIR": root, "SLB_DATA_DIR": root}
             proc = await asyncio.create_subprocess_exec(sys.executable, "-m", "slbot", "servidor",
                 "--puerto", str(port), "--simular", "gift", "--espera", "1",
-                env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
             try:
                 self.assertIn(str(port).encode(), await asyncio.wait_for(proc.stdout.readline(), 10))
                 async with aiohttp.ClientSession() as session:
