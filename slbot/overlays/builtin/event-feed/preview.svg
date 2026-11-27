@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="180" viewBox="0 0 480 180">
+  <rect width="480" height="180" rx="16" fill="#1d2533"/>
+  <g fill="#131722"><rect x="35" y="28" width="410" height="32" rx="7"/><rect x="35" y="74" width="410" height="32" rx="7"/><rect x="35" y="120" width="410" height="32" rx="7"/></g>
+  <g font-family="sans-serif" font-size="17" fill="white">
+    <text x="50" y="50"><tspan fill="#4dd0ff">viewer_demo</tspan> envió un regalo: Rose ×3</text>
+    <text x="50" y="96"><tspan fill="#4dd0ff">viewer_demo</tspan> ahora te sigue</text>
+    <text x="50" y="142"><tspan fill="#4dd0ff">viewer_demo</tspan> escribió: Hola a todos</text>
+  </g>
+</svg>

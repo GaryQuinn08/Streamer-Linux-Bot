@@ -1,0 +1,24 @@
+Streamer Linux Bot, beta 22
+
+Requisitos: Linux, Python 3.11 o superior e Internet. En Mint, Debian o Ubuntu,
+si faltan dependencias del sistema:
+
+  sudo apt install python3-venv libegl1 libgl1 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1 libxcb-xinerama0
+
+Extrae el ZIP entero (o clona el repositorio), abre una terminal en la carpeta
+y ejecuta sin sudo:
+
+  bash instalar.sh
+  ~/.local/bin/streamer-linux-bot
+
+Opciones del instalador: --tiktok (conector directo de terceros),
+--servidor (sin Qt), --kick (verificación de webhooks de Kick),
+--voz (instala las dependencias de audio que falten con APT), --sin-voz
+y --voz-natural (Piper en español de México, unos 120 MB la primera vez).
+La instalación no modifica las alertas ni la configuración del perfil.
+
+En la instalación de escritorio interactiva, el instalador ofrece preparar
+la voz local si faltan dependencias. Después abre Chat → Probar voz.
+Para la cola de música instala mpv con tu gestor de paquetes.
+Guías de LIVE Studio, SSH, Kick y Piper en el README del repositorio:
+https://github.com/GaryQuinn08/Streamer-Linux-Bot/tree/refactor/overlay-boundary

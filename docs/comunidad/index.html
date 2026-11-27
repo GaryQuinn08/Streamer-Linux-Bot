@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://tgvjkjxsaaatejkcwuxh.supabase.co; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Comunidad de creadores · Streamer Linux Bot</title>
+<link rel="stylesheet" href="../galeria/gallery.css">
+<link rel="stylesheet" href="../catalog-social.css?v=catalog-social-1">
+<link rel="stylesheet" href="community.css?v=account-1">
+<script src="../editor/engine.js?v=live-motion-1" defer></script>
+<script src="../overlay-pack.js?v=packs-1" defer></script>
+<script src="config.js?v=supabase-1" defer></script>
+<script src="../catalog-social.js?v=catalog-packs-1" defer></script>
+<script src="community.js?v=account-1" defer></script>
+</head>
+<body>
+<header class="site-nav"><div class="shell header-inner"><a class="brand" href="../galeria/">Streamer Linux Bot</a><nav aria-label="Estudio"><a href="../galeria/">Galería</a><a href="../editor/">Editor</a><a href="../packs/">Paquetes</a><a href="./" aria-current="page">Comunidad</a><a href="../cuenta/">Mi cuenta</a></nav></div></header>
+<main class="shell community">
+  <header class="hero"><div class="hero-copy"><p class="eyebrow">DISEÑA · COMPARTE · DA CRÉDITO</p><h1>Comunidad de creadores</h1><p>Comparte overlays individuales o paquetes completos para tu stream. Puedes explorar y descargar sin iniciar sesión; usa Google para votar o crear tu perfil. Publicar es opcional.</p></div><a class="button secondary" href="../editor/">Crear un diseño</a></header>
+  <p id="status" role="status" aria-live="polite">Comprobando el estado de los aportes…</p>
+  <section class="community-box" id="creator-access">
+    <h2>Comparte tus diseños</h2>
+    <p id="auth-info">Desde Mi cuenta puedes iniciar sesión, guardar tu perfil y elegir si quieres publicar como editor.</p>
+    <div class="community-actions"><a class="button secondary" id="account-link" href="../cuenta/">Ir a Mi cuenta</a></div>
+    <form id="submission" class="community-form" hidden>
+      <h3>Comparte un diseño</h3>
+      <label>Qué quieres publicar <select id="submission-kind"><option value="overlay">Overlay individual</option><option value="pack">Paquete de overlays</option></select></label>
+      <label>Crédito público del creador <input id="creator" readonly autocomplete="off"></label>
+      <label id="description-field">Descripción <textarea id="description" required minlength="10" maxlength="280" rows="3"></textarea></label>
+      <label>Licencia <select id="license" required aria-describedby="license-help">
+        <option value="" disabled selected>Elige cómo pueden reutilizar tu diseño</option>
+        <option value="CC0-1.0">Reutilización sin exigir crédito</option>
+        <option value="CC-BY-4.0">Reutilización con crédito al creador</option>
+        <option value="CC-BY-SA-4.0">Crédito al creador y misma licencia al compartir adaptaciones</option>
+      </select></label>
+      <p id="license-help">Las tres opciones permiten usar, modificar y compartir el diseño, incluso para fines comerciales. Elige qué condiciones quieres aplicar.</p>
+      <label id="overlay-file-field">HTML exportado por este editor <input id="file" type="file" accept=".html,.htm,text/html" required></label>
+      <label id="pack-file-field" hidden>Archivo de paquete <input id="pack-file" type="file" accept=".slbpack,application/json" aria-describedby="pack-help" required disabled></label>
+      <p id="pack-help" hidden>El nombre, la descripción y los componentes se toman del archivo .slbpack. Tu perfil y esta licencia se aplican a todo el paquete. <a href="../packs/">Abre el creador de paquetes</a> para preparar tu archivo.</p>
+      <p>Al publicar se muestran de inmediato los ajustes visuales y las animaciones. Tu HTML y CSS personalizados se quedan en el archivo original. El JavaScript se descarga por separado y nunca se publica.</p>
+      <p>Al publicar, confirmas que tienes derecho a compartir este diseño con el crédito y la licencia elegidos.</p>
+      <button class="button primary" id="submit" type="submit">Publicar diseño</button>
+    </form>
+    <div id="legacy"><p>Mientras se habilita Google, el editor permite <strong>Proponer diseño en GitHub</strong> con los ajustes visuales.</p><a href="../editor/">Abrir el editor</a></div>
+    <div id="my" hidden><h3>Mis aportes</h3><ul id="my-list"></ul><ul id="my-packs"></ul></div>
+  </section>
+  <section aria-labelledby="published-title"><h2 id="published-title">Diseños publicados</h2><p id="published-note">Cargando diseños de la comunidad…</p><div id="published" class="community-grid"></div></section>
+  <section aria-labelledby="packs-title"><h2 id="packs-title">Paquetes publicados</h2><p id="packs-note">Cargando paquetes de la comunidad…</p><p>Abre un archivo .slbpack en el <a href="../packs/">creador de paquetes</a> para personalizarlo o extraer el HTML de cada pieza.</p><div id="published-packs" class="community-grid"></div></section>
+</main>
+</body>
+</html>

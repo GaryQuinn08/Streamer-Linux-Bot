@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Diseña y prueba overlays de Streamer Linux Bot. Exporta un HTML para tus alertas, chat o eventos.">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-src 'self'; img-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Editor de overlays · Streamer Linux Bot</title>
+  <link rel="stylesheet" href="editor.css?v=editor-visual-1">
+  <script defer src="tags.js"></script>
+  <script defer src="engine.js?v=live-motion-1"></script>
+  <script defer src="streamlabs.js"></script>
+  <script defer src="js-runner.js?v=editor-visual-1"></script>
+  <script defer src="editor.js?v=editor-visual-1"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="wrap mast-inner">
+      <a class="brand" href="../galeria/" aria-label="Abrir galería de Streamer Linux Bot"><span class="brand-mark">SL</span> Streamer Linux Bot</a>
+      <nav aria-label="Navegación del estudio">
+        <a href="../galeria/">Galería</a>
+        <a href="../comunidad/">Comunidad</a>
+        <span aria-current="page">Editor</span>
+        <a href="../cuenta/">Mi cuenta</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+    <section class="hero" aria-labelledby="headline">
+      <div>
+        <p class="eyebrow"><span></span> ESTUDIO DE OVERLAYS</p>
+        <h1 id="headline">Diseña tu overlay</h1>
+        <p class="lede">Personaliza una plantilla, prueba sus etiquetas y descarga un HTML para importar al bot.</p>
+      </div>
+      <div class="hero-actions">
+        <div class="hero-button-row">
+          <button id="reopen" type="button" class="quiet">Abrir diseño…</button>
+          <button id="export" type="button" class="primary">Descargar HTML <span aria-hidden="true">↓</span></button>
+        </div>
+        <input id="design-file" type="file" accept=".html,.htm,text/html" hidden>
+        <span class="local-note">Sin cuenta ni datos de tu directo</span>
+      </div>
+    </section>
+
+    <details id="streamlabs-adapter" class="panel adapter">
+      <summary>Adaptar una alerta de Streamlabs</summary>
+      <div class="adapter-content">
+        <p>En Streamlabs, copia el campo <strong>Plantilla de mensaje</strong>, no la URL privada del widget. El texto se adapta aquí mismo, sin conectarse a Streamlabs.</p>
+        <div class="adapter-fields">
+          <label for="streamlabs-event">Evento
+            <select id="streamlabs-event">
+              <option value="follow">Seguidor</option>
+              <option value="donation">Donación / Super Chat</option>
+              <option value="bits">Bits de Twitch</option>
+              <option value="sub">Suscripción / membresía</option>
+            </select>
+          </label>
+          <label for="streamlabs-text">Plantilla de mensaje
+            <textarea id="streamlabs-text" rows="2" maxlength="420" placeholder="Ejemplo: ¡Gracias {name}!"></textarea>
+          </label>
+          <button id="streamlabs-apply" type="button" class="secondary">Usar en mi alerta</button>
+        </div>
+        <p id="streamlabs-status" class="help" aria-live="polite"></p>
+        <p class="help">Adapta texto y etiquetas compatibles. No importa archivos .overlay, sonidos, reglas, imágenes ni JavaScript. Si conservas el widget alojado en Streamlabs, agrega su URL privada directamente en OBS como fuente de navegador.</p>
+      </div>
+    </details>
+    <div class="workspace">
+      <section class="panel settings" aria-labelledby="settings-title">
+        <header class="panel-head">
+          <div><p class="kicker">01 · DISEÑO</p><h2 id="settings-title">Ajustes</h2></div>
+          <button id="reset" type="button" class="quiet" title="Restablecer esta plantilla">Restablecer</button>
+        </header>
+        <div class="panel-body">
+          <label for="mode">Plantilla</label>
+          <select id="mode">
+            <option value="alert">Alerta</option>
+            <option value="chat">Chat multiplataforma</option>
+            <option value="events">Últimos eventos</option>
+          </select>
+          <p id="mode-description" class="help"></p>
+          <label for="name">Nombre del archivo</label>
+          <input id="name" type="text" maxlength="60" spellcheck="false">
+          <label for="title">Título o nombre</label>
+          <input id="title" data-tag-target="Título" type="text" maxlength="220">
+          <label for="body">Mensaje</label>
+          <textarea id="body" data-tag-target="Mensaje" rows="2" maxlength="380"></textarea>
+
+          <fieldset class="palette">
+            <legend>Paleta</legend>
+            <label for="accent"><input id="accent" type="color"><span>Acento</span></label>
+            <label for="textColor"><input id="textColor" type="color"><span>Texto</span></label>
+            <label for="background"><input id="background" type="color"><span>Fondo</span></label>
+          </fieldset>
+
+          <fieldset class="numbers">
+            <legend>Escala y tiempo</legend>
+            <label for="size">Texto (px)<input id="size" type="number" min="12" max="72"></label>
+            <label for="duration">Segundos<input id="duration" type="number" min="0" max="300"></label>
+            <label for="opacity">Fondo (%)<input id="opacity" type="number" min="0" max="100"></label>
+            <label id="max-field" for="max">Filas<input id="max" type="number" min="1" max="24"></label>
+          </fieldset>
+          <p class="help">0 segundos mantiene las tarjetas visibles. Para el chat, las filas nuevas desplazan a las antiguas.</p>
+
+          <fieldset class="numbers">
+            <legend>Posición en el lienzo</legend>
+            <label for="positionX">Horizontal (%)<input id="positionX" type="number" min="0" max="100"></label>
+            <label for="positionY">Vertical (%)<input id="positionY" type="number" min="0" max="100"></label>
+            <label for="width">Ancho (%)<input id="width" type="number" min="24" max="100"></label>
+            <label for="align">Alinear texto<select id="align">
+              <option value="left">Izquierda</option><option value="center">Centro</option><option value="right">Derecha</option>
+            </select></label>
+          </fieldset>
+          <fieldset class="numbers">
+            <legend>Tarjeta</legend>
+            <label for="radius">Esquinas (px)<input id="radius" type="number" min="0" max="48"></label>
+            <label for="padding">Margen interno (px)<input id="padding" type="number" min="0" max="48"></label>
+            <label for="border">Grosor del acento (px)<input id="border" type="number" min="0" max="16"></label>
+            <label class="check-option"><input id="showPlatform" type="checkbox"> Mostrar plataforma</label>
+          </fieldset>
+
+          <fieldset class="motion">
+            <legend>Animación</legend>
+            <label for="enter">Entrada <select id="enter"></select></label>
+            <label for="enterMs">Duración (ms)<input id="enterMs" type="number" min="0" max="3000" step="1"></label>
+            <label for="exit">Salida <select id="exit"></select></label>
+            <label for="exitMs">Duración (ms)<input id="exitMs" type="number" min="0" max="3000" step="1"></label>
+          </fieldset>
+          <p class="help">La salida se aplica al terminar el tiempo de la tarjeta. Con 0 segundos no sale automáticamente.</p>
+        </div>
+      </section>
+
+      <section class="panel studio" aria-labelledby="preview-title">
+        <header class="panel-head">
+          <div><p class="kicker">02 · PRUEBAS</p><h2 id="preview-title">Vista previa</h2></div>
+          <span class="badge"><i aria-hidden="true"></i> Muestra local</span>
+        </header>
+        <div class="toolbar">
+          <label for="fixture">Evento de ejemplo</label>
+          <select id="fixture"></select>
+          <button id="play" type="button" class="secondary">Simular evento</button>
+          <button id="replay" type="button" class="quiet">Repetir animación</button>
+          <button id="clear" type="button" class="quiet">Limpiar</button>
+        </div>
+        <div class="screen" id="screen">
+          <iframe id="preview" title="Vista aislada de tu overlay" sandbox="" referrerpolicy="no-referrer"></iframe>
+          <button id="layout-handle" class="layout-handle" type="button" aria-label="Mover la tarjeta" aria-describedby="layout-help"
+                  aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v18M3 12h18m-6-6-3-3-3 3m6 12-3 3-3-3M6 9l-3 3 3 3m12-6 3 3-3 3"/></svg>
+          </button>
+        </div>
+        <div class="layout-bar">
+          <label class="check-option"><input id="show-guide" type="checkbox" checked> Guía de posición</label>
+          <p id="layout-help" class="help">Arrastra el control o usa las flechas. Mayús + flecha mueve más.</p>
+          <span id="position-info" class="coordinates" aria-live="polite"></span>
+          <button id="reset-position" type="button" class="quiet">Restablecer posición</button>
+        </div>
+        <p id="preview-help" class="help status-preview" aria-live="polite">La vista no se conecta a chats ni transmite.</p>
+
+        <div class="advanced-header">
+          <label class="check-option"><input id="advanced-enabled" type="checkbox" aria-controls="advanced-area"> Habilitar edición avanzada (HTML, CSS y JS)</label>
+          <p class="help">Muestra los controles técnicos. Nada de JavaScript se ejecuta al activar la casilla.</p>
+        </div>
+        <div class="code-area" id="advanced-area" hidden>
+          <div class="code-header" role="tablist" aria-label="Código del overlay">
+            <button type="button" id="tab-html" aria-selected="true" aria-controls="panel-html" role="tab">HTML</button>
+            <button type="button" id="tab-css" aria-selected="false" aria-controls="panel-css" role="tab" tabindex="-1">CSS</button>
+            <button type="button" id="tab-js" aria-selected="false" aria-controls="panel-js" role="tab" tabindex="-1">JS · laboratorio</button>
+            <span>Código de tu tarjeta</span>
+          </div>
+          <div role="tabpanel" id="panel-html" aria-labelledby="tab-html">
+            <label for="markup" class="sr-only">HTML de tu tarjeta</label>
+            <textarea id="markup" data-tag-target="HTML" spellcheck="false" rows="7" maxlength="12000"></textarea>
+            <p class="help">Usa etiquetas como <code>&lt;strong&gt;</code> y clases. <code>{title}</code> y <code>{body}</code> insertan tus campos. No se ejecuta JavaScript.</p>
+          </div>
+          <div role="tabpanel" id="panel-css" aria-labelledby="tab-css" hidden>
+            <label for="custom-css" class="sr-only">CSS de tu tarjeta</label>
+            <textarea id="custom-css" spellcheck="false" rows="7" maxlength="12000"></textarea>
+            <p class="help">Estilos, transiciones y animaciones locales. Sin <code>url()</code> ni <code>@import</code>.</p>
+          </div>
+          <div role="tabpanel" id="panel-js" aria-labelledby="tab-js" hidden>
+            <p class="help lab-lead">Prueba una función con un <code>evento</code> ficticio. Usa <code>mostrar(...)</code> para ver texto. Sin DOM, red ni datos reales.</p>
+            <label for="custom-js" class="sr-only">JavaScript personal para la prueba aislada</label>
+            <textarea id="custom-js" spellcheck="false" rows="6" maxlength="8000"></textarea>
+            <div class="lab-actions">
+              <button id="run-js" type="button" class="secondary">Ejecutar prueba de JS</button>
+              <button id="save-js" type="button" class="quiet">Descargar mi .js por separado</button>
+            </div>
+            <pre id="js-output" class="lab-output" aria-live="polite">Todavía no se ejecutó JavaScript.</pre>
+            <p class="help">El JavaScript personal no va en el HTML de OBS, en enlaces de ajustes ni en la galería.</p>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel variables" aria-labelledby="tags-title">
+        <header class="panel-head">
+          <div><p class="kicker">03 · DATOS</p><h2 id="tags-title">Etiquetas</h2></div>
+        </header>
+        <div class="panel-body">
+          <p class="help tag-intro">Inserta una etiqueta y el bot la sustituye por un dato del evento.</p>
+          <label for="tag-target">Insertar en</label>
+          <select id="tag-target">
+            <option value="title">Título</option>
+            <option value="body" selected>Mensaje</option>
+            <option value="markup">HTML</option>
+          </select>
+          <ul id="tag-list" class="tag-list" aria-label="Etiquetas disponibles"></ul>
+        </div>
+      </aside>
+    </div>
+
+    <div class="footer-notes">
+      <p><strong>Para usar en OBS o LIVE Studio:</strong> descarga el HTML, impórtalo en <strong>Overlays → Importar HTML…</strong> y copia la URL que te dé el bot.</p>
+      <button id="share" class="quiet" type="button">Copiar enlace de ajustes</button>
+      <button id="suggest-design" class="quiet" type="button">Proponer diseño en GitHub ↗</button>
+      <p class="help">Abre una propuesta editable. No se publica nada hasta que la envíes en GitHub.</p>
+      <p id="status" aria-live="polite"></p>
+    </div>
+    <noscript>Activa JavaScript para editar, simular eventos o descargar el HTML.</noscript>
+  </main>
+</body>
+</html>

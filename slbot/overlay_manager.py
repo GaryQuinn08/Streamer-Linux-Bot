@@ -8,6 +8,8 @@ Un overlay es una carpeta con:
 from __future__ import annotations
 
 import json
+import math
+import unicodedata
 import re
 import shutil
 import tempfile
@@ -16,6 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .overlay_appearance import Appearance, load_appearance
 from .paths import BUILTIN_OVERLAYS, user_overlays_dir
 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
@@ -24,6 +27,7 @@ PARAM_TYPES = {"text", "number", "bool", "color", "select"}
 
 MAX_ZIP_FILES = 2000
 MAX_ZIP_BYTES = 50 * 1024 * 1024
+_HTML_IMPORT_DESCRIPTION = "HTML importado. Para recibir alertas debe usar el SDK local."
 
 
 @dataclass
@@ -36,11 +40,15 @@ class OverlayInfo:
     version: str = ""
     author: str = ""
     params: list[dict[str, Any]] = field(default_factory=list)
+    appearance: Appearance | None = None
 
     @property
     def preview_path(self) -> Path | None:
-        candidate = self.path / "preview.png"
-        return candidate if candidate.is_file() else None
+        for name in ("preview.png", "preview.svg"):
+            candidate = self.path / name
+            if candidate.is_file():
+                return candidate
+        return None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -68,7 +76,7 @@ def _parse_manifest(folder: Path) -> dict[str, Any]:
         raise ValueError("manifest.json debe ser un objeto")
 
     overlay_id = data.get("id")
-    if not isinstance(overlay_id, str) or not ID_RE.match(overlay_id):
+    if not isinstance(overlay_id, str) or not ID_RE.fullmatch(overlay_id):
         raise ValueError("'id' inválido (usa minúsculas, números, guion y guion bajo)")
     if not isinstance(data.get("name"), str) or not data["name"].strip():
         raise ValueError("Falta 'name'")
@@ -76,11 +84,26 @@ def _parse_manifest(folder: Path) -> dict[str, Any]:
     params = data.get("params", [])
     if not isinstance(params, list):
         raise ValueError("'params' debe ser una lista")
+    known: set[str] = set()
     for p in params:
-        if not isinstance(p, dict) or not KEY_RE.match(str(p.get("key", ""))):
+        if not isinstance(p, dict) or not isinstance(p.get("key"), str) or not KEY_RE.fullmatch(p["key"]):
             raise ValueError(f"Parámetro con 'key' inválida: {p!r}")
-        if p.get("type") not in PARAM_TYPES:
-            raise ValueError(f"Parámetro '{p.get('key')}': tipo no soportado ({p.get('type')!r})")
+        key, kind = p["key"], p.get("type")
+        if key in known:
+            raise ValueError(f"Parámetro repetido: {key}")
+        known.add(key)
+        if not isinstance(kind, str) or kind not in PARAM_TYPES:
+            raise ValueError(f"Parámetro '{key}': tipo no soportado")
+        if kind == "number":
+            try:
+                lo, hi = float(p.get("min", 0)), float(p.get("max", 9999))
+                default = float(p.get("default", lo))
+                if not (all(map(math.isfinite, (lo, hi, default))) and -1e9 <= lo <= default <= hi <= 1e9):
+                    raise ValueError
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Rango numérico inválido: {key}") from exc
+        if kind == "select" and (not isinstance(p.get("options"), list) or not p["options"]):
+            raise ValueError(f"El parámetro '{key}' requiere opciones.")
     return data
 
 
@@ -88,6 +111,8 @@ def _load(folder: Path, source: str) -> OverlayInfo:
     data = _parse_manifest(folder)
     if data["id"] != folder.name:
         raise ValueError(f"El id '{data['id']}' no coincide con la carpeta '{folder.name}'")
+    params = list(data.get("params", []))
+    appearance = load_appearance(folder, data["name"]) if source == "user" and not params else None
     return OverlayInfo(
         id=data["id"],
         name=data["name"],
@@ -96,27 +121,81 @@ def _load(folder: Path, source: str) -> OverlayInfo:
         description=str(data.get("description", "")),
         version=str(data.get("version", "")),
         author=str(data.get("author", "")),
-        params=list(data.get("params", [])),
+        params=appearance.specs() if appearance else params,
+        appearance=appearance,
     )
 
 
 def list_overlays() -> dict[str, OverlayInfo]:
-    """Overlays incluidos y del usuario. Si coinciden en id, gana el del usuario."""
+    """Overlays incluidos y del usuario. Si coinciden en id, gana el integrado."""
     found: dict[str, OverlayInfo] = {}
     for root, source in ((BUILTIN_OVERLAYS, "builtin"), (user_overlays_dir(), "user")):
         if not root.is_dir():
             continue
-        for folder in sorted(p for p in root.iterdir() if p.is_dir()):
+        for folder in sorted(p for p in root.iterdir() if p.is_dir() and not p.is_symlink()):
             try:
                 info = _load(folder, source)
             except ValueError:
                 continue  # carpeta que no es un overlay válido
-            found[info.id] = info
+            found.setdefault(info.id, info)
     return found
 
 
 def find_overlay(overlay_id: str) -> OverlayInfo | None:
     return list_overlays().get(overlay_id)
+
+
+def validate_overlay_values(info: OverlayInfo, values: dict[str, str]) -> dict[str, str]:
+    """Only declared appearance settings go to the browser SDK."""
+    checked = {}
+    for spec in info.params:
+        key = spec["key"]
+        if key not in values:
+            continue
+        value = str(values[key])
+        kind = spec["type"]
+        if kind == "color" and not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+            raise ValueError(f"Color inválido: {key}")
+        if kind == "number":
+            parsed = float(value)
+            if not math.isfinite(parsed) or not float(spec.get("min", 0)) <= parsed <= float(spec.get("max", 9999)):
+                raise ValueError(f"El valor de '{key}' está fuera de rango.")
+        if kind == "bool" and value not in {"true", "false"}:
+            raise ValueError(f"Valor inválido: {key}")
+        if kind == "select" and value not in {str(choice) for choice in spec["options"]}:
+            raise ValueError(f"Opción inválida: {key}")
+        max_length = spec.get("maxLength", 500) if info.appearance else 500
+        if len(value) > max_length:
+            raise ValueError(f"El valor de '{key}' es demasiado largo.")
+        checked[key] = value
+    return checked
+
+
+def _new_overlay_id(name: str) -> str:
+    label = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()
+    stem = re.sub(r"[^a-z0-9]+", "-", label).strip("-")[:52] or "alerta"
+    existing = list_overlays()
+    key, number = stem, 2
+    while key in existing or (user_overlays_dir() / key).exists():
+        key = f"{stem}-{number}"
+        number += 1
+    return key
+
+
+def create_alert(name: str) -> OverlayInfo:
+    """Make an editable copy of the built-in animation without replacing it."""
+    name = name.strip()
+    if not 1 <= len(name) <= 80:
+        raise ValueError("Escribe un nombre de 1 a 80 caracteres.")
+    key = _new_overlay_id(name)
+    template = BUILTIN_OVERLAYS / "gift-alert"
+    with tempfile.TemporaryDirectory(prefix="slb-alert-") as temp:
+        root = Path(temp) / "overlay"
+        _copy_tree_no_links(template, root)
+        manifest = _parse_manifest(root)
+        manifest.update(id=key, name=name, description="Alerta propia. Puedes enviarla desde Triggers.")
+        (root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+        return import_overlay(root)
 
 
 def _safe_extract(zf: zipfile.ZipFile, dest: Path) -> None:
@@ -168,17 +247,47 @@ def import_overlay(src: Path, overwrite: bool = False) -> OverlayInfo:
         elif src.is_file() and src.suffix.lower() == ".zip":
             extract_dir = Path(tmp) / "x"
             extract_dir.mkdir()
-            with zipfile.ZipFile(src) as zf:
-                _safe_extract(zf, extract_dir)
+            try:
+                with zipfile.ZipFile(src) as zf:
+                    _safe_extract(zf, extract_dir)
+            except zipfile.BadZipFile as exc:
+                raise ValueError("El archivo ZIP no se puede leer.") from exc
             root = _find_overlay_root(extract_dir)
+        elif src.is_file() and src.suffix.lower() in {".html", ".htm"}:
+            if src.stat().st_size > MAX_ZIP_BYTES:
+                raise ValueError("El HTML es demasiado grande.")
+            root = Path(tmp) / "html"
+            root.mkdir()
+            shutil.copy2(src, root / "index.html")
+            name = src.stem[:80].strip() or "Overlay HTML"
+            saved = next((info for info in list_overlays().values()
+                          if info.source == "user" and info.name == name
+                          and info.description == _HTML_IMPORT_DESCRIPTION), None)
+            manifest = {"id": saved.id if saved else _new_overlay_id(name), "name": name,
+                        "description": _HTML_IMPORT_DESCRIPTION,
+                        "params": []}
+            (root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
         else:
-            raise ValueError("Elige una carpeta o un archivo .zip")
+            raise ValueError("Elige una carpeta, un .zip o un archivo HTML independiente.")
 
         data = _parse_manifest(root)
+        if (BUILTIN_OVERLAYS / data["id"]).is_dir():
+            raise ValueError(f"El id '{data['id']}' está reservado para un overlay integrado")
         dest = user_overlays_dir() / data["id"]
-        if dest.exists():
-            if not overwrite:
-                raise FileExistsError(f"Ya existe un overlay con id '{data['id']}'")
-            shutil.rmtree(dest)
-        _copy_tree_no_links(root, dest)
+        if dest.exists() and not overwrite:
+            raise FileExistsError(f"Ya existe un overlay con id '{data['id']}'")
+        if root.resolve() == dest.resolve():
+            return _load(dest, "user")
+        with tempfile.TemporaryDirectory(prefix=".slb-stage-", dir=dest.parent) as stage:
+            staged, previous = Path(stage) / "new" / dest.name, Path(stage) / "previous"
+            _copy_tree_no_links(root, staged)
+            _load(staged, "user")
+            if dest.exists():
+                dest.rename(previous)
+            try:
+                staged.rename(dest)
+            except OSError:
+                if previous.exists():
+                    previous.rename(dest)
+                raise
     return _load(dest, "user")

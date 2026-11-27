@@ -3,15 +3,15 @@
  *
  * Inclúyelo en tu index.html:   <script src="/sdk/overlay-sdk.js"></script>
  *
- * Parámetros (vienen de la URL, ej. ?color=%23ff0000&duration=8):
+ * Parámetros (URL personalizada > preferencia guardada > valor del script):
  *   SLB.param("color", "#ff4d8d")     -> texto
  *   SLB.number("duration", 5)         -> número
  *   SLB.bool("sound", true)           -> booleano
  *
  * Mensajes en vivo:
- *   SLB.onEvent("gift", fn)           -> eventos de plataforma (tipo "gift", "follow", "chat"...; "*" = todos)
+ *   SLB.onEvent("gift", fn)           -> eventos de plataforma (solo feed integrado)
  *   SLB.onAlert("mi-overlay", fn)     -> alertas que una acción envía a este overlay
- *   SLB.onMessage(fn)                 -> todos los mensajes sin filtrar
+ *   SLB.onMessage(fn)                 -> mensajes de esta suscripción (p. ej. el chat integrado)
  *
  * IMPORTANTE: usa siempre textContent (no innerHTML) para mostrar nombres y
  * mensajes de los espectadores; así no pueden inyectar HTML en tu stream.
@@ -21,9 +21,15 @@
 
   const query = new URLSearchParams(window.location.search);
   const messageHandlers = [];
+  const overlayPath = window.location.pathname.match(/^\/overlay\/([a-z0-9_-]+)(?:\/|$)/);
+
+  const overlayId = overlayPath ? overlayPath[1] : null;
+  const presets = /* SLB_PRESETS */ {};
+  const preset = overlayId && Object.prototype.hasOwnProperty.call(presets, overlayId) ? presets[overlayId] : {};
 
   function param(name, fallback) {
-    return query.has(name) ? query.get(name) : fallback;
+    if (query.has(name)) return query.get(name);
+    return Object.prototype.hasOwnProperty.call(preset, name) ? String(preset[name]) : fallback;
   }
 
   function number(name, fallback) {
@@ -32,8 +38,8 @@
   }
 
   function bool(name, fallback) {
-    if (!query.has(name)) return fallback;
-    return ["1", "true", "yes", "si", "on"].includes(query.get(name).toLowerCase());
+    const value = param(name, null);
+    return value === null ? fallback : ["1", "true", "yes", "si", "on"].includes(value.toLowerCase());
   }
 
   function onMessage(fn) {
@@ -53,7 +59,9 @@
   }
 
   function connect() {
-    const ws = new WebSocket("ws://" + window.location.host + "/ws");
+    if (!overlayPath) return;
+    const scheme = window.location.protocol === "https:" ? "wss://" : "ws://";
+    const ws = new WebSocket(scheme + window.location.host + "/ws/" + overlayPath[1]);
     ws.onmessage = (e) => {
       let msg;
       try {
@@ -72,6 +80,6 @@
     ws.onclose = () => setTimeout(connect, 2000); // reconexión automática
   }
 
-  window.SLB = { param, number, bool, onMessage, onEvent, onAlert };
+  window.SLB = { overlayId, param, number, bool, onMessage, onEvent, onAlert };
   connect();
 })();

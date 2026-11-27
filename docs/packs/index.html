@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'">
+  <title>Armar un tema · Streamer Linux Bot</title>
+  <link rel="stylesheet" href="../galeria/gallery.css">
+  <link rel="stylesheet" href="builder.css?v=packs-1">
+  <script src="../editor/engine.js?v=live-motion-1" defer></script>
+  <script src="../overlay-pack.js?v=packs-1" defer></script>
+  <script src="builder.js?v=packs-1" defer></script>
+</head>
+<body>
+<header class="site-nav"><div class="shell header-inner"><a class="brand" href="../galeria/">Streamer Linux Bot</a><nav aria-label="Estudio"><a href="../galeria/">Galería</a><a href="../editor/">Editor</a><a href="../comunidad/">Comunidad</a><a href="../cuenta/">Mi cuenta</a></nav></div></header>
+<main class="shell pack-builder">
+  <header class="builder-hero">
+    <p class="builder-kicker">ESTUDIO DE TEMAS · UN DISEÑO, VARIAS PIEZAS</p>
+    <h1>Arma tu tema</h1>
+    <p>Combina alertas, chat, banners y pantallas. Crea piezas aquí o reutiliza los HTML que exportaste del editor. Descarga el pack y súbelo a Comunidad cuando quieras.</p>
+    <div class="builder-actions">
+      <button class="button secondary" id="open-pack" type="button">Abrir un pack…</button>
+      <button class="button primary" id="save-pack" type="button">Descargar pack</button>
+      <a class="button secondary" href="../comunidad/">Publicar en Comunidad</a>
+    </div>
+    <input id="pack-file" type="file" accept=".slbpack,.json,application/json" hidden>
+    <p id="feedback" role="status" aria-live="polite"></p>
+  </header>
+  <div class="builder-grid">
+    <section class="builder-card">
+      <h2>1. Datos del tema</h2>
+      <label>Nombre <input id="pack-name" maxlength="60" value="Mi primer tema"></label>
+      <label>Descripción <textarea id="pack-description" maxlength="240" rows="3" placeholder="Cuenta qué incluye o cuándo usarlo"></textarea></label>
+      <fieldset class="builder-palette"><legend>Colores para todo el pack</legend>
+        <label>Acento<input id="accent" type="color" value="#8ff0b2"></label>
+        <label>Texto<input id="textColor" type="color" value="#f0fff7"></label>
+        <label>Fondo<input id="background" type="color" value="#142820"></label>
+      </fieldset>
+      <button class="button secondary" id="palette" type="button">Aplicar a todas las piezas</button>
+    </section>
+    <section class="builder-card">
+      <h2>2. Piezas del pack</h2>
+      <div class="builder-actions"><label for="piece-kind">Tipo de pieza</label><select id="piece-kind"></select><button class="button secondary" id="add-piece" type="button">Agregar pieza</button></div>
+      <button class="button secondary" id="import-html" type="button">Añadir HTML del editor…</button>
+      <input id="html-files" type="file" accept=".html,.htm,text/html" multiple hidden>
+      <p class="builder-note">Una pieza de cada tipo. Si importas otra del mismo tipo, eliges si la reemplazas. El pack conserva la apariencia visual, no el código personalizado.</p>
+      <ul id="piece-list"></ul>
+    </section>
+    <section class="builder-card builder-preview">
+      <h2>3. Ajusta la pieza</h2>
+      <p id="no-piece">Agrega una pieza para editarla y verla aquí.</p>
+      <div id="piece-editor" hidden>
+        <div class="builder-inline">
+          <label>Nombre de la pieza <input id="piece-name" maxlength="60"></label>
+          <label>Título en pantalla <input id="piece-title" maxlength="220"></label>
+          <label>Texto en pantalla <textarea id="piece-body" maxlength="380" rows="2"></textarea></label>
+        </div>
+        <iframe id="preview" sandbox="" referrerpolicy="no-referrer" title="Vista segura de la pieza"></iframe>
+        <div class="builder-actions"><button class="button secondary" id="save-piece" type="button">Descargar esta pieza como HTML</button><a class="button secondary" href="../editor/" id="edit-single">Abrir el editor de overlays</a></div>
+      </div>
+    </section>
+  </div>
+</main>
+</body>
+</html>

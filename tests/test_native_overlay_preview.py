@@ -1,0 +1,182 @@
+import json
+import os
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from slbot.core.config import Config
+from slbot.overlay_manager import import_overlay
+from slbot.overlay_pack import LABELS, import_pack
+from slbot.runtime import Runtime
+
+
+class NativePreviewTests(unittest.TestCase):
+    def setUp(self):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PySide6.QtWidgets import QApplication
+        from slbot.ui.main_window import LogBridge, OverlaysTab
+
+        self.app = QApplication.instance() or QApplication([])
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        env = patch.dict(os.environ, {"SLB_CONFIG_DIR": tmp.name, "SLB_DATA_DIR": tmp.name})
+        env.start()
+        self.addCleanup(env.stop)
+        source = self.root / "tema.slbpack"
+        source.write_text(json.dumps({"format": "slb-pack", "version": 1, "name": "Vista local",
+            "components": [{"kind": kind, "design": {"name": kind,
+                "accent": "#ee55cc", "duration": 1, "enter": "slide-left", "exit": "fade",
+                "enterMs": 350, "exitMs": 300}} for kind in LABELS]}))
+        self.pieces = dict(zip(LABELS, import_pack(source)))
+        self.runtime = Runtime(config=Config.defaults())
+        self.bridge = LogBridge()
+        self.tab = OverlaysTab(self.runtime, self.bridge)
+        self.tab.resize(1050, 820)
+        self.tab.show()
+        self.addCleanup(self.tab.close)
+        self.app.processEvents()
+
+    def choose(self, kind):
+        self.tab.refresh(select_id=self.pieces[kind].id)
+        self.app.processEvents()
+        return self.tab.preview
+
+    def test_every_piece_paints_even_with_port_disabled(self):
+        self.assertIsNone(self.runtime.port)
+        snapshots = []
+        for kind in LABELS:
+            view = self.choose(kind)
+            self.assertEqual(view.model.kind, kind)
+            self.assertFalse(view.grab().isNull())
+            self.assertEqual(self.tab.play_preview.isVisible(), kind in {"alert", "events", "chat"})
+            self.assertFalse(self.tab.preview_btn.isEnabled())
+            snapshots.append(view.grab().toImage())
+        self.assertNotEqual(snapshots[0], snapshots[1])
+        self.assertNotEqual(snapshots[4], snapshots[5])  # transparent camera vs full scene
+
+    def test_dirty_settings_repaint_and_playback_is_only_local(self):
+        from PySide6.QtTest import QTest
+        from PySide6.QtWidgets import QLineEdit
+
+        view = self.choose("alert")
+        original = view.grab().toImage()
+        self.tab.form_host.findChildren(QLineEdit)[0].setText("Vista sin guardar")
+        self.assertEqual(view.model.settings["title"], "Vista sin guardar")
+        self.assertNotEqual(view.grab().toImage(), original)
+        self.assertNotIn("overlay_presets", self.runtime.config.settings)
+        with patch.object(self.runtime, "submit") as submit:
+            self.tab.play_preview.click()
+            self.assertEqual(view.phase, "enter")
+            first_frame = view.grab().toImage()
+            QTest.qWait(120)
+            self.assertNotEqual(view.grab().toImage(), first_frame)
+            self.assertTrue(self.tab.play_exit.isVisible())
+            self.tab.play_exit.click()
+            self.assertEqual(view.phase, "exit")
+            for _ in range(80):
+                if view.phase == "hidden":
+                    break
+                QTest.qWait(10)
+            self.assertEqual(view.phase, "hidden")
+            submit.assert_not_called()
+        self.choose("banner")
+        self.assertEqual(view.phase, "idle")
+        self.assertFalse(self.tab.play_preview.isVisible())
+
+    def test_pop_matches_browser_scale_milestones_and_long_form_scrolls(self):
+        from PySide6.QtWidgets import QLineEdit, QScrollArea
+        from slbot.ui.overlay_preview import motion
+        self.choose("alert")
+        scroll = self.tab.findChild(QScrollArea)
+        self.assertGreater(scroll.verticalScrollBar().maximum(), 0)
+        field = self.tab.form_host.findChildren(QLineEdit)[0]
+        self.assertGreaterEqual(field.height(), field.minimumSizeHint().height())
+        self.assertAlmostEqual(motion("pop", 0, False)[3], .84)
+        self.assertAlmostEqual(motion("pop", .68, False)[3], 1.06)
+        self.assertAlmostEqual(motion("pop", .68, True)[3], 1.05)
+        self.assertAlmostEqual(motion("pop", 1, True)[3], .88)
+        self.assertLess(motion("slide-left", 1, True)[1], 0)
+
+    def test_chat_scope_is_previewed_but_not_written_to_other_overlays(self):
+        from urllib.parse import parse_qs, urlsplit
+        self.runtime.overlays.port = 8765
+        self.tab.refresh(select_id="multi-chat")
+        self.assertTrue(self.tab.output_scope.isVisible())
+        self.assertTrue(self.tab.dock_group.isVisible())
+        self.assertEqual(self.tab.url.text(), "http://127.0.0.1:8765/overlay/multi-chat/")
+        from unittest.mock import PropertyMock
+        from PySide6.QtGui import QGuiApplication
+        expected_path = "/dock/chat/" + "a" * 32 + "/"
+        with patch.object(type(self.runtime.overlays), "chat_dock_path", new_callable=PropertyMock,
+                          return_value=expected_path):
+            self.tab._update_url()
+            self.assertTrue(self.tab.copy_dock.isEnabled())
+            self.tab.copy_dock.click()
+            self.assertEqual(QGuiApplication.clipboard().text(), "http://127.0.0.1:8765" + expected_path)
+            self.assertNotIn(expected_path, self.tab.url.text())
+            QGuiApplication.clipboard().clear()
+        self.tab.scope.setCurrentIndex(self.tab.scope.findData("twitch"))
+        self.assertEqual(parse_qs(urlsplit(self.tab.url.text()).query),
+                         {"twitch": ["true"], "tiktok": ["false"], "youtube": ["false"], "kick": ["false"]})
+        self.assertEqual(self.tab.preview.model.settings["tiktok"], False)
+        self.tab._set_value("twitchColor", "#7812ab")
+        self.assertEqual(self.tab.preview.model.settings["twitchColor"], "#7812ab")
+        self.assertNotIn("overlay_presets", self.runtime.config.settings)
+        self.choose("banner")
+        self.assertFalse(self.tab.output_scope.isVisible())
+        self.assertFalse(self.tab.dock_group.isVisible())
+        self.assertEqual(urlsplit(self.tab.url.text()).query, "")
+
+    def test_label_control_recovers_old_muted_chat_without_changing_copied_urls(self):
+        from PySide6.QtTest import QTest
+        from PySide6.QtWidgets import QCheckBox, QPushButton
+
+        self.runtime._port_override = 0
+        self.runtime.config.path = self.root / "config.json"
+        self.runtime.config.settings["overlay_presets"] = {"multi-chat": {
+            "twitch": "false", "youtube": "false", "kick": "false", "tiktok": "false",
+            "twitchColor": "#224499", "names": "false",
+        }}
+        self.runtime.start()
+        self.addCleanup(self.runtime.stop)
+        self.tab.refresh(select_id="multi-chat")
+        plain = self.tab.url.text()
+        self.tab.scope.setCurrentIndex(self.tab.scope.findData("twitch"))
+        twitch = self.tab.url.text()
+        self.tab.scope.setCurrentIndex(0)
+        self.app.processEvents()
+        badges = self.tab.findChild(QCheckBox, "chat-appearance-badges")
+        self.assertTrue(badges.isChecked())
+        recovery = self.tab.findChild(QPushButton, "recover-chat-without-labels")
+        self.assertTrue(recovery.isVisible())
+        recovery.click()
+        self.assertFalse(badges.isChecked())
+        for key in ("twitch", "tiktok", "youtube", "kick"):
+            self.assertTrue(self.tab.findChild(QCheckBox, f"chat-appearance-{key}").isChecked())
+        self.tab.save_btn.click()
+        for _ in range(100):
+            if "La fuente abierta" in self.tab.status.text():
+                break
+            QTest.qWait(10)
+        self.assertIn("La fuente abierta", self.tab.status.text())
+        self.assertEqual(Config.load(self.runtime.config.path).settings["overlay_presets"]["multi-chat"], {
+            "badges": "false", "twitchColor": "#224499", "names": "false",
+        })
+        self.assertEqual(self.tab.url.text(), plain)
+        self.tab.scope.setCurrentIndex(self.tab.scope.findData("twitch"))
+        self.assertEqual(self.tab.url.text(), twitch)
+
+    def test_html_without_metadata_remains_external(self):
+        source = self.root / "libre.html"
+        source.write_text("<script>throw Error('do not run')</script>", encoding="utf-8")
+        item = import_overlay(source)
+        self.tab.refresh(select_id=item.id)
+        self.assertIsNone(self.tab.preview.model)
+        self.assertIn("diseño externo", self.tab.preview_hint.text())
+        self.assertFalse(self.tab.play_preview.isVisible())
+
+
+if __name__ == "__main__":
+    unittest.main()

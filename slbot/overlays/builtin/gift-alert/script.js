@@ -41,7 +41,7 @@ function nextAlert() {
   }, duration);
 }
 
-SLB.onAlert("gift-alert", (msg) => {
+SLB.onAlert(SLB.overlayId, (msg) => {
   queue.push(msg);
   nextAlert();
 });

@@ -1,0 +1,23 @@
+.catalog-social {
+  margin-block-start: 8px; padding-block-start: 6px; border-top: 1px solid #2d4353;
+  min-width: 0; font-size: 11.5px; color: #b7cad9;
+}
+.catalog-total { margin: 0 0 3px; }
+.catalog-rating summary { color: #bef1d6; cursor: pointer; width: max-content; font-weight: 650; }
+.catalog-rating summary:hover { color: #e5fff2; }
+.catalog-guide, .catalog-message { margin: 5px 0 0; line-height: 1.35; }
+.catalog-message:empty { display: none; }
+.catalog-stars { margin: 4px 0 0; padding: 0; border: 0; min-inline-size: 0; }
+.catalog-options { display: inline-flex; max-width: 100%; flex-wrap: wrap; gap: 2px; margin: 1px 4px 4px 0; }
+.catalog-options label { position: relative; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.catalog-star-symbol {
+  width: 20px; height: 23px; border: 1px solid #456171; border-radius: 4px; text-align: center; line-height: 21px;
+  color: #a9bccc; background: #152635; font-size: 13px;
+}
+.catalog-options label.chosen .catalog-star-symbol, .catalog-options label:hover .catalog-star-symbol {
+  color: #ffe0a0; border-color: #8b763d; background: #382f23;
+}
+.catalog-options input:focus-visible ~ .catalog-star-symbol { outline: 2px solid #a7f2cc; outline-offset: 2px; }
+.catalog-stars .button { margin-block-end: 2px; }
+.catalog-stars .button:disabled { opacity: .6; cursor: wait; }
+.catalog-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }

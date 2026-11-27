@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 250">
+  <rect width="500" height="250" rx="14" fill="#151d28"/>
+  <text x="28" y="45" fill="#edf5ff" font-family="sans-serif" font-size="21" font-weight="700">Chat multiplataforma</text>
+  <g font-family="sans-serif" font-size="14" fill="#edf5ff">
+    <rect x="28" y="68" width="444" height="39" rx="6" fill="#232e3c" stroke="#354353"/>
+    <path d="M30 72V103" stroke="#c39af9" stroke-width="4"/>
+    <text x="43" y="92" fill="#c39af9" font-size="12" font-weight="700">TWITCH</text>
+    <text x="124" y="92"><tspan fill="#a8f1dd" font-weight="700">Luz</tspan> · ¡Hola, qué buen directo!</text>
+    <rect x="28" y="116" width="444" height="39" rx="6" fill="#232e3c" stroke="#354353"/>
+    <path d="M30 120V151" stroke="#ffa3a9" stroke-width="4"/>
+    <text x="43" y="140" fill="#ffa3a9" font-size="12" font-weight="700">YOUTUBE</text>
+    <text x="124" y="140"><tspan fill="#a8f1dd" font-weight="700">Mar</tspan> · Saludos desde México.</text>
+    <rect x="28" y="164" width="444" height="39" rx="6" fill="#232e3c" stroke="#354353"/>
+    <path d="M30 168V199" stroke="#7ce8eb" stroke-width="4"/>
+    <text x="43" y="188" fill="#7ce8eb" font-size="12" font-weight="700">TIKTOK</text>
+    <text x="124" y="188"><tspan fill="#a8f1dd" font-weight="700">Sol</tspan> · Ya pasé a saludar.</text>
+  </g>
+  <text x="28" y="228" fill="#aab7c8" font-family="sans-serif" font-size="12">Vista de ejemplo · Fuente de navegador</text>
+</svg>

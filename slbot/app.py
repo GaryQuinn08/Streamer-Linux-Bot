@@ -7,17 +7,18 @@ import sys
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from .runtime import Runtime
+from .core.config import Config
 from .ui.main_window import LogBridge, MainWindow
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, editor_only: bool = False, config: Config | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     app = QApplication(sys.argv if argv is None else argv)
     app.setApplicationName("Streamer Linux Bot")
     app.setDesktopFileName("streamer-linux-bot")
 
     bridge = LogBridge()
-    runtime = Runtime(on_log=bridge.message.emit)
+    runtime = Runtime(on_log=bridge.message.emit, editor_only=editor_only, config=config)
     try:
         runtime.start()
     except Exception as exc:
@@ -29,8 +30,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    window = MainWindow(runtime, bridge)
-    window.show()
-    code = app.exec()
-    runtime.stop()
-    return code
+    try:
+        window = MainWindow(runtime, bridge)
+        window.show()
+        return app.exec()
+    finally:
+        runtime.stop()

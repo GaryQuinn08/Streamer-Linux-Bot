@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="95" viewBox="0 0 400 95">
+  <rect x="6" y="6" width="388" height="83" rx="12" fill="#131823"/>
+  <text x="22" y="39" fill="#fff" font-size="20" font-weight="bold" font-family="sans-serif">Meta de regalos</text>
+  <text x="380" y="39" fill="#fff" font-size="20" font-family="sans-serif" text-anchor="end">8 / 25</text>
+  <rect x="22" y="53" width="356" height="15" rx="7.5" fill="#344153"/>
+  <rect x="22" y="53" width="114" height="15" rx="7.5" fill="#37dfa8"/>
+</svg>
